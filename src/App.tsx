@@ -562,6 +562,7 @@ export default function App() {
             onDragEnd={handleDragEnd}
             analysisId={currentAnalysisId}
             modelId={settings.modelId}
+            sourceText={editorContent}
           />
         </ResizablePanel>
       </ResizablePanelGroup>

@@ -93,6 +93,7 @@ export interface GraphViewportConfig {
 export interface GraphPoint {
   segmentId: string;
   index: number;
+  totalSegments: number;
   x: number;
   y: number;
   effectiveValue: number;
@@ -100,8 +101,14 @@ export interface GraphPoint {
   isOverridden: boolean;
   startLine: number;
   endLine: number;
+  startOffset: number;
+  endOffset: number;
+  startUnitId: string;
+  endUnitId: string;
   lineRangeLabel: string;
   excerpt: string;
+  sourcePassage: string;
+  rationale?: string;
   phaseLabel?: string;
   movementKind?: MovementKind;
 }

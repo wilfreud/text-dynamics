@@ -20,6 +20,7 @@ import { SegmentInspector } from "./SegmentInspector";
 import { MovementInspector } from "./MovementInspector";
 import { GroupManager } from "./GroupManager";
 import { MetricHelpDialog } from "./MetricHelpDialog";
+import { PassageReaderDialog } from "./PassageReaderDialog";
 import { Activity, Loader2, Info, Spline } from "lucide-react";
 
 interface GraphViewportProps {
@@ -41,6 +42,7 @@ interface GraphViewportProps {
   onDragEnd: () => void;
   analysisId?: string | null;
   modelId?: string;
+  sourceText?: string;
 }
 
 export function GraphViewport({
@@ -62,6 +64,7 @@ export function GraphViewport({
   onDragEnd,
   analysisId,
   modelId = "gemini-3.8-flash",
+  sourceText = "",
 }: GraphViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>({
@@ -74,6 +77,7 @@ export function GraphViewport({
   const [inspectedMovementId, setInspectedMovementId] = useState<string | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
   const [isMetricHelpOpen, setIsMetricHelpOpen] = useState(false);
+  const [isPassageReaderOpen, setIsPassageReaderOpen] = useState(false);
   const [curveInterpolation, setCurveInterpolation] = useState<CurveInterpolation>(() => {
     try {
       const saved = localStorage.getItem("text_dynamics_curve_mode");
@@ -145,9 +149,18 @@ export function GraphViewport({
       sourceUnits,
       selectedMetric,
       viewportConfig,
-      curveInterpolation
+      curveInterpolation,
+      sourceText
     );
-  }, [analysis, overrides, sourceUnits, selectedMetric, viewportConfig, curveInterpolation]);
+  }, [
+    analysis,
+    overrides,
+    sourceUnits,
+    selectedMetric,
+    viewportConfig,
+    curveInterpolation,
+    sourceText,
+  ]);
 
   // Handle single segment inspector selection
   const singleSelectedSegment = useMemo(() => {
@@ -162,6 +175,41 @@ export function GraphViewport({
       null
     );
   }, [singleSelectedSegment, viewModel]);
+
+  // Derived state for full passage reader dialog
+  const readingSegmentIndex = useMemo(() => {
+    if (!analysis || selectedSegmentIds.length !== 1) return -1;
+    return analysis.segments.findIndex((s) => s.id === selectedSegmentIds[0]);
+  }, [analysis, selectedSegmentIds]);
+
+  const readingSegment = useMemo(() => {
+    if (!analysis || readingSegmentIndex < 0) return null;
+    return analysis.segments[readingSegmentIndex] ?? null;
+  }, [analysis, readingSegmentIndex]);
+
+  const readingPoint = useMemo(() => {
+    if (!viewModel || !readingSegment) return null;
+    return (
+      viewModel.points.find((p) => p.segmentId === readingSegment.id) ?? null
+    );
+  }, [viewModel, readingSegment]);
+
+  const readingUnitRangeLabel = useMemo(() => {
+    if (!readingPoint) return "";
+    return readingPoint.startUnitId === readingPoint.endUnitId
+      ? readingPoint.startUnitId
+      : `${readingPoint.startUnitId}–${readingPoint.endUnitId}`;
+  }, [readingPoint]);
+
+  // Active target for floating tooltip card (pinned to selected node or hovering)
+  const activeTooltipTarget = useMemo<TooltipTarget | null>(() => {
+    if (isPassageReaderOpen) return null;
+    if (hoverTarget) return hoverTarget;
+    if (singleSelectedPoint) {
+      return { type: "point", point: singleSelectedPoint };
+    }
+    return null;
+  }, [isPassageReaderOpen, hoverTarget, singleSelectedPoint]);
 
   const inspectedMovement = useMemo(() => {
     if (!inspectedMovementId || !analysis) return null;
@@ -309,10 +357,14 @@ export function GraphViewport({
               onHoverTarget={setHoverTarget}
             />
             <GraphTooltip
-              target={hoverTarget}
+              target={activeTooltipTarget}
               metric={currentDescriptor}
               containerWidth={dimensions.width}
               containerHeight={dimensions.height}
+              onOpenPassageReader={(point) => {
+                onSelectSegment(point.segmentId, false);
+                setIsPassageReaderOpen(true);
+              }}
             />
           </>
         ) : null}
@@ -329,6 +381,7 @@ export function GraphViewport({
             onAddGroup={onAddGroup}
             onRemoveGroup={onRemoveGroup}
             onClose={() => setIsInspectorOpen(false)}
+            onOpenPassageReader={() => setIsPassageReaderOpen(true)}
           />
         )}
 
@@ -358,6 +411,36 @@ export function GraphViewport({
           open={isMetricHelpOpen}
           onOpenChange={setIsMetricHelpOpen}
           initialMetric={selectedMetric}
+        />
+
+        {/* Full Exact Source Passage Reader Dialog */}
+        <PassageReaderDialog
+          open={isPassageReaderOpen}
+          onOpenChange={setIsPassageReaderOpen}
+          segment={readingSegment}
+          segmentIndex={readingSegmentIndex}
+          totalSegments={analysis?.segments.length ?? 0}
+          sourcePassage={readingPoint?.sourcePassage ?? ""}
+          unitRangeLabel={readingUnitRangeLabel}
+          activeMetric={currentDescriptor}
+          effectiveMetricValue={readingPoint?.effectiveValue ?? 0}
+          movementKind={readingPoint?.movementKind}
+          phaseLabel={readingPoint?.phaseLabel}
+          hasPrevious={readingSegmentIndex > 0}
+          hasNext={
+            readingSegmentIndex >= 0 &&
+            readingSegmentIndex < (analysis?.segments.length ?? 0) - 1
+          }
+          onNavigatePrevious={() => {
+            if (analysis && readingSegmentIndex > 0) {
+              onSelectSegment(analysis.segments[readingSegmentIndex - 1].id, false);
+            }
+          }}
+          onNavigateNext={() => {
+            if (analysis && readingSegmentIndex < analysis.segments.length - 1) {
+              onSelectSegment(analysis.segments[readingSegmentIndex + 1].id, false);
+            }
+          }}
         />
       </div>
     </main>

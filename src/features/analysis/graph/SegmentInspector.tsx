@@ -6,7 +6,7 @@ import type {
 } from "../types";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
-import { X, RotateCcw, Users, Plus, Trash2 } from "lucide-react";
+import { X, RotateCcw, Users, Plus, Trash2, Maximize2 } from "lucide-react";
 
 interface SegmentInspectorProps {
   segment: AnalysisSegment;
@@ -18,6 +18,7 @@ interface SegmentInspectorProps {
   onAddGroup: (label: string, segmentIds: string[]) => void;
   onRemoveGroup: (groupId: string) => void;
   onClose: () => void;
+  onOpenPassageReader?: () => void;
 }
 
 export function SegmentInspector({
@@ -30,6 +31,7 @@ export function SegmentInspector({
   onAddGroup,
   onRemoveGroup,
   onClose,
+  onOpenPassageReader,
 }: SegmentInspectorProps) {
   const currentSegOverride = overrides?.segmentOverrides[segment.id];
   const [newGroupLabel, setNewGroupLabel] = useState("");
@@ -126,8 +128,22 @@ export function SegmentInspector({
 
       {/* Excerpt */}
       {excerpt && (
-        <div className="my-2.5 rounded bg-muted/40 p-2 font-mono text-[11px] italic text-muted-foreground leading-snug">
-          "{excerpt}"
+        <div className="my-2.5 rounded border border-border/50 bg-muted/30 p-2.5 font-serif text-[11px] text-foreground/90 leading-snug">
+          <div className="flex items-center justify-between font-mono text-[9px] text-muted-foreground pb-1">
+            <span className="uppercase tracking-wider font-semibold">Passage</span>
+            {onOpenPassageReader && (
+              <button
+                type="button"
+                onClick={onOpenPassageReader}
+                className="flex items-center gap-1 hover:text-foreground cursor-pointer transition-colors"
+                title="Open full passage reader"
+              >
+                <Maximize2 className="size-2.5" />
+                <span>Read</span>
+              </button>
+            )}
+          </div>
+          <p className="whitespace-pre-wrap">{excerpt}</p>
         </div>
       )}
 

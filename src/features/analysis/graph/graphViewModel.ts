@@ -25,7 +25,8 @@ export function buildGraphViewModel(
   sourceUnits: SourceUnit[],
   metricKind: MetricKind,
   viewport: GraphViewportConfig,
-  curveInterpolation: CurveInterpolation = "smooth"
+  curveInterpolation: CurveInterpolation = "smooth",
+  sourceText: string = ""
 ): GraphViewModel {
   const descriptor = METRIC_DESCRIPTORS[metricKind];
   const { segments: effectiveSegments, movements: effectiveMovements } =
@@ -44,20 +45,27 @@ export function buildGraphViewModel(
 
     const startLine = (startUnit?.lineIndex ?? 0) + 1;
     const endLine = (endUnit?.lineIndex ?? startUnit?.lineIndex ?? 0) + 1;
-    const lineRangeLabel =
-      startLine === endLine
-        ? `Line ${startLine}`
-        : `Lines ${startLine}–${endLine}`;
+    const startOffset = startUnit?.startIndex ?? 0;
+    const endOffset = endUnit?.endIndex ?? 0;
 
-    // Derive concise excerpt from local source units, never model-invented
-    let excerpt = "";
-    if (startUnit) {
-      if (startUnit.id === endUnit?.id || !endUnit) {
-        excerpt = startUnit.text;
-      } else {
-        excerpt = `${startUnit.text} … ${endUnit.text}`;
-      }
+    // Segment ordinal label (Section 18 & 66: "Segment 2 of 8")
+    const lineRangeLabel = `Segment ${i + 1} of ${totalPoints}`;
+
+    // Exact local source slice from document text
+    let sourcePassage = "";
+    if (
+      sourceText &&
+      startOffset >= 0 &&
+      endOffset <= sourceText.length &&
+      startOffset < endOffset
+    ) {
+      sourcePassage = sourceText.slice(startOffset, endOffset);
+    } else if (startUnit) {
+      sourcePassage = startUnit.text;
     }
+
+    // Concise fallback excerpt
+    let excerpt = sourcePassage;
     if (excerpt.length > 80) {
       excerpt = `${excerpt.slice(0, 77)}...`;
     }
@@ -81,6 +89,7 @@ export function buildGraphViewModel(
     return {
       segmentId: seg.id,
       index: i,
+      totalSegments: totalPoints,
       x,
       y,
       effectiveValue: metricVal,
@@ -88,8 +97,14 @@ export function buildGraphViewModel(
       isOverridden: seg.isOverridden[metricKind],
       startLine,
       endLine,
+      startOffset,
+      endOffset,
+      startUnitId: seg.startUnitId,
+      endUnitId: seg.endUnitId,
       lineRangeLabel,
       excerpt,
+      sourcePassage,
+      rationale: seg.rationale,
       phaseLabel: phase?.label,
       movementKind: movement?.kind,
     };
