@@ -37,6 +37,7 @@ interface GraphViewportProps {
   onClearSelection: () => void;
   onDragOverride: (segmentId: string, metric: MetricKind, newValue: number) => void;
   onDragEnd: () => void;
+  analysisId?: string | null;
   modelId?: string;
 }
 
@@ -57,6 +58,7 @@ export function GraphViewport({
   onClearSelection,
   onDragOverride,
   onDragEnd,
+  analysisId,
   modelId = "gemini-3.8-flash",
 }: GraphViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -239,6 +241,7 @@ export function GraphViewport({
               viewModel={viewModel}
               selectedSegmentIds={selectedSegmentIds}
               groups={overrides?.groups}
+              analysisId={analysisId}
               onSelectSegment={onSelectSegment}
               onSelectMovement={handleSelectMovement}
               onDragOverride={handleNodeDrag}

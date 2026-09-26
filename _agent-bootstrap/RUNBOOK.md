@@ -49,3 +49,7 @@ The task files are intentionally more precise than these launcher prompts. Paste
 ## Reusable repair prompt
 
 `Read _agent-bootstrap/prompts/99_repair_from_logs.md. Diagnose the current failure using the repository state and logs, apply the smallest correct fix, and stop.`
+
+## 11 — live Gemini model catalog + Free/Paid labels
+
+`Read _agent-bootstrap/prompts/11_dynamic_gemini_model_catalog.md and execute it completely. Follow AGENTS.md and load tiger-style, rust-tauri-guardrails, gemini-structured-output, and observability-debugging. Replace the Gemini model text input with the live classified select and stop when this task is complete.`

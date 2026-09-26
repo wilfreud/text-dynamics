@@ -500,6 +500,7 @@ export default function App() {
           onClearSelection={() => setSelectedSegmentIds([])}
           onDragOverride={handleDragOverride}
           onDragEnd={handleDragEnd}
+          analysisId={currentAnalysisId}
           modelId={settings.modelId}
         />
       </div>

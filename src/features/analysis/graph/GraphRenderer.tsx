@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import type {
   GraphMovementMarker,
   GraphPoint,
@@ -6,11 +6,13 @@ import type {
 } from "./graphTypes";
 import type { SegmentGroup } from "../types";
 import { unprojectY } from "./graphGeometry";
+import { createGraphAnimationScope } from "./graphAnimation";
 
 interface GraphRendererProps {
   viewModel: GraphViewModel;
   selectedSegmentIds: string[];
   groups?: SegmentGroup[];
+  analysisId?: string | null;
   onSelectSegment: (segmentId: string, isMulti: boolean) => void;
   onSelectMovement?: (movementId: string) => void;
   onDragOverride?: (segmentId: string, newValue: number) => void;
@@ -27,6 +29,7 @@ export function GraphRenderer({
   viewModel,
   selectedSegmentIds,
   groups = [],
+  analysisId,
   onSelectSegment,
   onSelectMovement,
   onDragOverride,
@@ -47,6 +50,39 @@ export function GraphRenderer({
     10,
     viewport.height - viewport.padding.top - viewport.padding.bottom
   );
+
+  // Anime.js Lifecycle-safe animation scope
+  const animScopeRef = useRef<ReturnType<typeof createGraphAnimationScope> | null>(null);
+
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const scope = createGraphAnimationScope(svgRef.current);
+    animScopeRef.current = scope;
+    return () => {
+      scope.cleanup();
+      animScopeRef.current = null;
+    };
+  }, []);
+
+  // 1. Reveal animation on initial analysis load or analysis update
+  const lastAnalysisIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!animScopeRef.current || !analysisId) return;
+    if (lastAnalysisIdRef.current !== analysisId) {
+      lastAnalysisIdRef.current = analysisId;
+      animScopeRef.current.animateReveal();
+    }
+  }, [analysisId]);
+
+  // 2. Metric switch animation (micro-transition without altering geometry)
+  const lastMetricKindRef = useRef(viewModel.metric.kind);
+  useEffect(() => {
+    if (!animScopeRef.current) return;
+    if (lastMetricKindRef.current !== viewModel.metric.kind) {
+      lastMetricKindRef.current = viewModel.metric.kind;
+      animScopeRef.current.animateMetricSwitch();
+    }
+  }, [viewModel.metric.kind]);
 
   // Pointer drag event handlers for vertical node override editing
   function handleNodePointerDown(
