@@ -59,6 +59,11 @@ export async function ipcSaveSetting(key: string, value: string): Promise<void> 
   return invoke<void>("save_setting", { key, value });
 }
 
+export async function ipcGetApiKeyStatus(): Promise<import("../../features/settings/types").ApiKeyStatus> {
+  logger.debug("IPC: get_api_key_status");
+  return invoke<import("../../features/settings/types").ApiKeyStatus>("get_api_key_status");
+}
+
 export async function ipcHasApiKey(): Promise<boolean> {
   logger.debug("IPC: has_api_key");
   return invoke<boolean>("has_api_key");
@@ -73,6 +78,12 @@ export async function ipcDeleteApiKey(): Promise<void> {
   logger.debug("IPC: delete_api_key");
   return invoke<void>("delete_api_key");
 }
+
+export async function ipcGetRuntimeDiagnostics(): Promise<import("../../features/settings/types").RuntimeDiagnostics> {
+  logger.debug("IPC: get_runtime_diagnostics");
+  return invoke<import("../../features/settings/types").RuntimeDiagnostics>("get_runtime_diagnostics");
+}
+
 
 export type BillingAvailability = "free_tier_available" | "paid_only" | "unknown";
 

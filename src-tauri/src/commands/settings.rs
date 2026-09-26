@@ -3,6 +3,8 @@ use rusqlite::{params, OptionalExtension};
 use tauri::State;
 
 use crate::error::AppError;
+use crate::persistence::db::RuntimeDiagnostics;
+use crate::secrets::keyring::ApiKeyStatus;
 use crate::state::AppState;
 
 #[tauri::command]
@@ -40,6 +42,11 @@ pub fn save_setting(
 }
 
 #[tauri::command]
+pub fn get_api_key_status(state: State<'_, AppState>) -> ApiKeyStatus {
+    state.secrets.get_api_key_status()
+}
+
+#[tauri::command]
 pub fn has_api_key(state: State<'_, AppState>) -> Result<bool, AppError> {
     state.secrets.has_api_key()
 }
@@ -52,6 +59,14 @@ pub fn set_api_key(state: State<'_, AppState>, api_key: String) -> Result<(), Ap
 #[tauri::command]
 pub fn delete_api_key(state: State<'_, AppState>) -> Result<(), AppError> {
     state.secrets.delete_api_key()
+}
+
+#[tauri::command]
+pub fn get_runtime_diagnostics(state: State<'_, AppState>) -> RuntimeDiagnostics {
+    RuntimeDiagnostics {
+        credential: state.secrets.diagnostics(),
+        database: state.db.diagnostics(),
+    }
 }
 
 #[tauri::command]

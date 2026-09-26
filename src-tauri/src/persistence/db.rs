@@ -2,14 +2,32 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
 
 const CURRENT_SCHEMA_VERSION: i32 = 1;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseDiagnostics {
+    pub backend: String,
+    pub uri: String,
+    pub resolved_path: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeDiagnostics {
+    pub credential: crate::secrets::keyring::CredentialDiagnostics,
+    pub database: DatabaseDiagnostics,
+}
+
 #[derive(Clone)]
 pub struct Database {
     conn: Arc<Mutex<Connection>>,
+    resolved_path: String,
 }
 
 impl Database {
@@ -17,6 +35,7 @@ impl Database {
         let conn = Connection::open(path)?;
         let db = Self {
             conn: Arc::new(Mutex::new(conn)),
+            resolved_path: path.to_string_lossy().to_string(),
         };
         db.init_schema()?;
         Ok(db)
@@ -26,9 +45,31 @@ impl Database {
         let conn = Connection::open_in_memory()?;
         let db = Self {
             conn: Arc::new(Mutex::new(conn)),
+            resolved_path: ":memory:".to_string(),
         };
         db.init_schema()?;
         Ok(db)
+    }
+
+    pub fn resolved_path(&self) -> &str {
+        &self.resolved_path
+    }
+
+    pub fn diagnostics(&self) -> DatabaseDiagnostics {
+        let status = match self.conn() {
+            Ok(_) => "open".to_string(),
+            Err(e) => format!("error: {e}"),
+        };
+        DatabaseDiagnostics {
+            backend: "sqlite".to_string(),
+            uri: if self.resolved_path == ":memory:" {
+                "sqlite::memory:".to_string()
+            } else {
+                format!("sqlite:{}", self.resolved_path)
+            },
+            resolved_path: self.resolved_path.clone(),
+            status,
+        }
     }
 
     pub fn conn(&self) -> Result<MutexGuard<'_, Connection>, AppError> {

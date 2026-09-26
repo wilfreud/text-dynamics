@@ -1,4 +1,5 @@
 import type { ParsedAppError } from "../lib/errors";
+import type { ApiKeyStatus } from "../features/settings/types";
 import { AlertCircle, CheckCircle2, KeyRound, X } from "lucide-react";
 import { Button } from "./ui/button";
 
@@ -9,6 +10,7 @@ interface StatusBarProps {
   lineCount: number;
   modelId: string;
   hasApiKey: boolean;
+  apiKeyStatus?: ApiKeyStatus;
   onOpenSettings: () => void;
   activeError: ParsedAppError | null;
   onDismissError: () => void;
@@ -21,6 +23,7 @@ export function StatusBar({
   lineCount,
   modelId,
   hasApiKey,
+  apiKeyStatus,
   onOpenSettings,
   activeError,
   onDismissError,
@@ -86,7 +89,16 @@ export function StatusBar({
         <div className="flex items-center gap-3">
           <span title="Configured model identifier">{modelId}</span>
           <span>•</span>
-          {hasApiKey ? (
+          {apiKeyStatus?.state === "error" ? (
+            <span
+              onClick={onOpenSettings}
+              className="flex cursor-pointer items-center gap-1 text-destructive hover:underline"
+              title={`Credential store error: ${apiKeyStatus.message}`}
+            >
+              <AlertCircle className="size-3" />
+              Keychain Error
+            </span>
+          ) : hasApiKey ? (
             <span
               onClick={onOpenSettings}
               className="flex cursor-pointer items-center gap-1 text-foreground/80 hover:text-foreground"

@@ -36,12 +36,28 @@ pub fn run() {
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
             let db_path = app_data_dir.join("text_dynamics.db");
-            log::info!("Initializing SQLite database at: {}", db_path.display());
+            log::info!(
+                "[database] backend=sqlite uri=sqlite:text_dynamics.db resolved_path={} open=pending",
+                db_path.display()
+            );
 
             let db = persistence::Database::new(&db_path)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            log::info!(
+                "[database] backend=sqlite resolved_path={} open=ok",
+                db.resolved_path()
+            );
 
             let secrets = secrets::KeyringStore::new();
+            let cred_diag = secrets.diagnostics();
+            log::info!(
+                "[credential] backend={} service={} account={} status={:?}",
+                cred_diag.backend,
+                cred_diag.service,
+                cred_diag.account,
+                cred_diag.status
+            );
+
             app.manage(state::AppState::new(db, secrets));
 
             Ok(())
@@ -55,9 +71,11 @@ pub fn run() {
             commands::documents::list_documents,
             commands::settings::get_setting,
             commands::settings::save_setting,
+            commands::settings::get_api_key_status,
             commands::settings::has_api_key,
             commands::settings::set_api_key,
             commands::settings::delete_api_key,
+            commands::settings::get_runtime_diagnostics,
             commands::settings::list_gemini_models,
             commands::analysis::analyze_document,
             commands::analysis::get_latest_analysis,

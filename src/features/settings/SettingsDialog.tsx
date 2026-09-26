@@ -67,6 +67,7 @@ export function SettingsDialog({
 }: SettingsDialogProps) {
   const [settings, setSettings] = useState<AppSettings>({
     hasApiKey: false,
+    apiKeyStatus: { state: "missing" },
     modelId: "gemini-3.8-flash",
     customInstruction: "",
     theme: "system",
@@ -154,7 +155,11 @@ export function SettingsDialog({
     try {
       await updateApiKey(newApiKey.trim());
       setNewApiKey("");
-      setSettings((prev) => ({ ...prev, hasApiKey: true }));
+      setSettings((prev) => ({
+        ...prev,
+        hasApiKey: true,
+        apiKeyStatus: { state: "configured" },
+      }));
       setKeySaveMessage("API key saved securely in OS credential store.");
       onSettingsSaved?.();
       // Refresh models immediately with the newly stored key
@@ -173,7 +178,11 @@ export function SettingsDialog({
 
     try {
       await clearApiKey();
-      setSettings((prev) => ({ ...prev, hasApiKey: false }));
+      setSettings((prev) => ({
+        ...prev,
+        hasApiKey: false,
+        apiKeyStatus: { state: "missing" },
+      }));
       setNewApiKey("");
       setModels([]);
       setKeySaveMessage("API key removed from OS credential store.");
@@ -245,13 +254,18 @@ export function SettingsDialog({
                 Gemini API Key
               </label>
               <div className="flex items-center gap-1 text-xs">
-                {settings.hasApiKey ? (
+                {settings.apiKeyStatus?.state === "configured" ? (
                   <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 font-mono text-[11px] text-foreground">
                     <ShieldCheck className="size-3 text-foreground" />
                     Key configured
                   </span>
+                ) : settings.apiKeyStatus?.state === "error" ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-destructive/10 px-2 py-0.5 text-[11px] text-destructive" title={settings.apiKeyStatus.message}>
+                    <AlertCircle className="size-3" />
+                    Store error
+                  </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded bg-destructive/10 px-2 py-0.5 text-[11px] text-destructive">
+                  <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
                     <AlertCircle className="size-3" />
                     Not configured
                   </span>

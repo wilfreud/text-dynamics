@@ -1,22 +1,37 @@
 import {
   ipcDeleteApiKey,
+  ipcGetApiKeyStatus,
+  ipcGetRuntimeDiagnostics,
   ipcGetSetting,
-  ipcHasApiKey,
   ipcListGeminiModels,
   ipcSaveSetting,
   ipcSetApiKey,
 } from "../../lib/tauri/ipc";
 import { getLogger } from "../../lib/logging";
-import type { AppSettings } from "./types";
+import type { ApiKeyStatus, AppSettings, RuntimeDiagnostics } from "./types";
 
 const logger = getLogger(["settings"]);
 
-export async function checkApiKeyPresence(): Promise<boolean> {
+export async function getApiKeyStatus(): Promise<ApiKeyStatus> {
   try {
-    return await ipcHasApiKey();
+    return await ipcGetApiKeyStatus();
   } catch (error) {
-    logger.error("Failed to check API key presence: {error}", { error: String(error) });
-    return false;
+    logger.error("Failed to fetch API key status: {error}", { error: String(error) });
+    return { state: "error", message: String(error) };
+  }
+}
+
+export async function checkApiKeyPresence(): Promise<boolean> {
+  const status = await getApiKeyStatus();
+  return status.state === "configured";
+}
+
+export async function fetchRuntimeDiagnostics(): Promise<RuntimeDiagnostics | null> {
+  try {
+    return await ipcGetRuntimeDiagnostics();
+  } catch (error) {
+    logger.error("Failed to fetch runtime diagnostics: {error}", { error: String(error) });
+    return null;
   }
 }
 
@@ -61,7 +76,8 @@ export async function saveSetting(key: string, value: string): Promise<void> {
 }
 
 export async function loadAppSettings(): Promise<AppSettings> {
-  const hasApiKey = await checkApiKeyPresence();
+  const apiKeyStatus = await getApiKeyStatus();
+  const hasApiKey = apiKeyStatus.state === "configured";
   let modelId = await loadSetting("model_id", "");
   if (!modelId) {
     modelId = await loadSetting("gemini_model", "gemini-3.8-flash");
@@ -71,6 +87,7 @@ export async function loadAppSettings(): Promise<AppSettings> {
 
   return {
     hasApiKey,
+    apiKeyStatus,
     modelId: modelId || "gemini-3.8-flash",
     customInstruction,
     theme,

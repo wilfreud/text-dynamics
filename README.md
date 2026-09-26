@@ -88,6 +88,7 @@ To inspect development logs safely with bounded line counts:
 Detailed architectural and operational documentation is available in `docs/`:
 
 - [Architecture & Data Flow](file:///Users/wilfried/Developer/experiments/text-dynamics/docs/architecture.md) — System boundaries, IPC commands, SQLite persistence, and UI layout.
+- [Local Storage & Credential Persistence](file:///Users/wilfried/Developer/experiments/text-dynamics/docs/local-storage.md) — OS Keychain credentials, SQLite application paths, durability matrix, and verification.
 - [Gemini Analysis Pipeline](file:///Users/wilfried/Developer/experiments/text-dynamics/docs/gemini-analysis.md) — Structured JSON schema, live model catalog, validation rules, retry loops, and error mapping.
 - [Dynamic Graph Engine](file:///Users/wilfried/Developer/experiments/text-dynamics/docs/graph.md) — Metric definitions, movement path generation, drag overrides, and Anime.js animations.
 - [Debugging & Observability](file:///Users/wilfried/Developer/experiments/text-dynamics/docs/debugging.md) — Log pipelines, diagnostic scripts, secret redaction, and troubleshooting.

@@ -42,6 +42,7 @@ export default function App() {
   // Application settings state
   const [settings, setSettings] = useState<AppSettings>({
     hasApiKey: false,
+    apiKeyStatus: { state: "missing" },
     modelId: "gemini-3.8-flash",
     customInstruction: "",
     theme: "system",
@@ -565,6 +566,7 @@ export default function App() {
         lineCount={lineCount}
         modelId={settings.modelId}
         hasApiKey={settings.hasApiKey}
+        apiKeyStatus={settings.apiKeyStatus}
         onOpenSettings={() => setIsSettingsOpen(true)}
         activeError={activeError}
         onDismissError={() => setActiveError(null)}
