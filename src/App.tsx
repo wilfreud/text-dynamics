@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Header } from "./components/Header";
 import { StatusBar } from "./components/StatusBar";
 import { TextEditor } from "./features/editor/TextEditor";
-import { GraphWorkspace } from "./features/analysis/components/GraphWorkspace";
+import { GraphViewport } from "./features/analysis/graph/GraphViewport";
 import { SettingsDialog } from "./features/settings/SettingsDialog";
 import { DocumentSwitcher } from "./features/documents/DocumentSwitcher";
 import {
@@ -12,15 +12,13 @@ import {
   updateExistingDocument,
 } from "./features/documents/documentService";
 import type { Document } from "./features/documents/types";
-import {
-  loadAppSettings,
-} from "./features/settings/settingsService";
+import { loadAppSettings } from "./features/settings/settingsService";
 import type { AppSettings } from "./features/settings/types";
 import {
   requestDocumentAnalysis,
   fetchLatestAnalysis,
 } from "./features/analysis/analysisService";
-import type { CanonicalAnalysis, AnalysisSegment } from "./features/analysis/types";
+import type { CanonicalAnalysis, UserOverrides } from "./features/analysis/types";
 import { unitizeText } from "./features/analysis/unitization";
 import { parseAppError, type ParsedAppError } from "./lib/errors";
 import { getLogger } from "./lib/logging";
@@ -51,6 +49,7 @@ export default function App() {
 
   // Analysis state
   const [currentAnalysis, setCurrentAnalysis] = useState<CanonicalAnalysis | null>(null);
+  const [currentOverrides, setCurrentOverrides] = useState<UserOverrides | undefined>(undefined);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeError, setActiveError] = useState<ParsedAppError | null>(null);
 
@@ -63,7 +62,6 @@ export default function App() {
 
   // Debounced auto-save timer ref
   const saveTimeoutRef = useRef<number | null>(null);
-  // Ref to track latest content for saving on unmount/document switch
   const latestContentRef = useRef(editorContent);
   latestContentRef.current = editorContent;
   const currentDocRef = useRef(currentDoc);
@@ -114,8 +112,10 @@ export default function App() {
       const analysisResult = await fetchLatestAnalysis(docId);
       if (analysisResult) {
         setCurrentAnalysis(analysisResult.analysis);
+        setCurrentOverrides(analysisResult.overrides);
       } else {
         setCurrentAnalysis(null);
+        setCurrentOverrides(undefined);
       }
     } catch (err) {
       const parsed = parseAppError(err);
@@ -210,6 +210,7 @@ export default function App() {
 
       // Successfully received valid canonical analysis
       setCurrentAnalysis(result.analysis);
+      setCurrentOverrides(result.overrides);
       logger.info("Analysis completed successfully id={id}", { id: result.record.id });
     } catch (err) {
       const parsed = parseAppError(err);
@@ -224,12 +225,19 @@ export default function App() {
     }
   }
 
-  // Handle segment selection from graph/preview
-  function handleSelectSegment(segment: AnalysisSegment) {
-    setSelectedSegmentId(segment.id);
+  // Compute unitization from current editor content
+  const unitization = useMemo(() => {
+    return unitizeText(editorContent);
+  }, [editorContent]);
 
-    // Map segment unit IDs to physical line numbers
-    const unitization = unitizeText(editorContent);
+  // Handle segment selection from graph
+  function handleSelectSegment(segmentId: string) {
+    setSelectedSegmentId(segmentId);
+
+    if (!currentAnalysis) return;
+    const segment = currentAnalysis.segments.find((s) => s.id === segmentId);
+    if (!segment) return;
+
     const startUnit = unitization.units.find((u) => u.id === segment.startUnitId);
     const endUnit = unitization.units.find((u) => u.id === segment.endUnitId);
 
@@ -271,13 +279,15 @@ export default function App() {
           selectedRange={selectedLineRange}
         />
 
-        {/* Right: Graph Workspace / Placeholder */}
-        <GraphWorkspace
+        {/* Right: Custom SVG Graph Viewport */}
+        <GraphViewport
           analysis={currentAnalysis}
+          overrides={currentOverrides}
+          sourceUnits={unitization.units}
           isAnalyzing={isAnalyzing}
-          modelId={settings.modelId}
-          onSelectSegment={handleSelectSegment}
           selectedSegmentId={selectedSegmentId}
+          onSelectSegment={handleSelectSegment}
+          modelId={settings.modelId}
         />
       </div>
 
