@@ -24,7 +24,7 @@ text-dynamics/
 │   ├── components/
 │   │   ├── Header.tsx                   # Document title, actions (Analyze, Switcher, Settings)
 │   │   ├── StatusBar.tsx                # Dirty state, counts, model indicator, error banner
-│   │   └── ui/                          # Lightweight Radix UI primitives (button, dialog, input, textarea)
+│   │   └── ui/                          # Lightweight primitives (button, dialog, input, textarea, resizable)
 │   ├── features/
 │   │   ├── analysis/                    # Dynamic analysis domain & visual presentation
 │   │   │   ├── analysisService.ts       # IPC bridge mapping DTOs to CanonicalAnalysis
@@ -89,6 +89,7 @@ text-dynamics/
 | **`lucide-react`** | High-clarity editorial icons (minimalist chevron, activity, save, trash, check indicators). |
 | **`@fontsource-variable/geist`**| Clean, variable typography ensuring consistent rendering across desktop environments. |
 | **`@logtape/logtape` + `@logtape/redaction`** | Structured frontend logger with automated redacting of sensitive credential parameters. |
+| **`react-resizable-panels` (v4)** | Fluid, accessible resizable workspace splits with imperative collapse/expand ref and localStorage persistence. |
 
 ### Backend (Rust) Dependencies
 

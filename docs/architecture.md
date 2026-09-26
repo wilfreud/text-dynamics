@@ -60,13 +60,14 @@ Text Dynamics is a local-first desktop application built with **Tauri v2**, **Ru
 
 ```text
 src/
-├── App.tsx                     # Top-level application orchestrator
+├── App.tsx                     # Top-level application orchestrator & resizable workspace
 ├── main.tsx                    # Entrypoint & logging initialization
 ├── index.css                   # Tailwind v4 theme, Geist font, design tokens
 ├── components/
-│   ├── Header.tsx              # Document title, switcher trigger, analyze CTA, settings
+│   ├── Header.tsx              # Document title, switcher trigger, analyze CTA, settings, editor toggle
 │   ├── StatusBar.tsx           # Save indicator, counts, model indicator, error notices
-│   └── ui/                     # Restrained shadcn primitives (Button, Dialog, Input, Textarea)
+│   └── ui/                     # Restrained shadcn primitives (Button, Dialog, Input, Textarea, Resizable)
+│       └── resizable.tsx       # ResizablePanelGroup, ResizablePanel, ResizableHandle (react-resizable-panels v4)
 ├── features/
 │   ├── documents/              # Local SQLite document management
 │   │   ├── DocumentSwitcher.tsx# Document list, switching, and creation
@@ -168,3 +169,20 @@ src-tauri/src/
                                                   ▼
                                       [SQLite: overrides table]
 ```
+
+---
+
+## 5. Workspace Layout & Responsiveness
+
+The central workspace uses **shadcn Resizable** (`react-resizable-panels@^4`) for fluid desktop column sizing:
+
+1. **Panels**:
+   - **Source Editor (left)**: Default `40%`, min `18%`, max `65%`, `collapsible={true}` (`collapsedSize="0%"`).
+   - **Dynamic Graph (right)**: Default `60%`, min `35%`.
+2. **Handle**: Accessible `ResizableHandle` with keyboard support, `cursor-col-resize`, and an expanded hit area (`after:w-3`).
+3. **Collapse / Expand**:
+   - Collapse button in the editor header and a toggle in `Header.tsx` control the panel via imperative ref (`collapse()`, `expand()`).
+   - Collapsing releases 100% of horizontal workspace to the graph.
+4. **Persistence**: Panel layout is automatically saved to `localStorage` under `text-dynamics.workspace-layout.v1` via `useDefaultLayout`.
+5. **Container Responsiveness**: The graph viewport observes its containing panel via `ResizeObserver` and recalculates SVG projection coordinates dynamically without remounting or re-requesting Gemini analyses.
+

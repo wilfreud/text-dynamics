@@ -1,8 +1,14 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import { Header } from "./components/Header";
 import { StatusBar } from "./components/StatusBar";
 import { TextEditor, type EditorSelectionRange } from "./features/editor/TextEditor";
 import { GraphViewport } from "./features/analysis/graph/GraphViewport";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "./components/ui/resizable";
 import { SettingsDialog } from "./features/settings/SettingsDialog";
 import { DocumentSwitcher } from "./features/documents/DocumentSwitcher";
 import {
@@ -51,8 +57,26 @@ export default function App() {
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Editor pane collapse state
+  // Editor pane collapse state & panel ref
+  const editorPanelRef = usePanelRef();
   const [editorCollapsed, setEditorCollapsed] = useState(false);
+
+  // Layout persistence with official useDefaultLayout hook
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: "text-dynamics.workspace-layout.v1",
+    storage: localStorage,
+  });
+
+  const handleToggleEditor = useCallback(() => {
+    const panel = editorPanelRef.current;
+    if (!panel) return;
+    if (panel.isCollapsed()) {
+      panel.expand();
+    } else {
+      panel.collapse();
+    }
+  }, [editorPanelRef]);
+
 
   // Analysis state
   const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(null);
@@ -468,42 +492,70 @@ export default function App() {
         onAnalyze={handleAnalyze}
         isAnalyzing={isAnalyzing}
         canAnalyze={editorContent.trim().length > 0}
+        onToggleEditor={handleToggleEditor}
+        isEditorCollapsed={editorCollapsed}
       />
 
-      {/* Main Workspace (Split View) */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Main Workspace (Resizable Split View) */}
+      <ResizablePanelGroup
+        orientation="horizontal"
+        defaultLayout={defaultLayout}
+        onLayoutChanged={onLayoutChanged}
+        className="flex-1 overflow-hidden"
+      >
         {/* Left: Collapsible Text Editor */}
-        <TextEditor
-          content={editorContent}
-          onChange={handleEditorChange}
-          collapsed={editorCollapsed}
-          onToggleCollapse={() => setEditorCollapsed((prev) => !prev)}
-          selectedRange={selectedLineRange}
-          onCursorChange={handleEditorCursorChange}
-        />
+        <ResizablePanel
+          id="source-editor"
+          panelRef={editorPanelRef}
+          defaultSize="40%"
+          minSize="18%"
+          maxSize="65%"
+          collapsible={true}
+          collapsedSize="0%"
+          onResize={(size) => {
+            setEditorCollapsed(size.asPercentage === 0);
+          }}
+        >
+          <TextEditor
+            content={editorContent}
+            onChange={handleEditorChange}
+            collapsed={editorCollapsed}
+            onToggleCollapse={handleToggleEditor}
+            selectedRange={selectedLineRange}
+            onCursorChange={handleEditorCursorChange}
+          />
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
 
         {/* Right: Custom SVG Graph Viewport with Interactions */}
-        <GraphViewport
-          analysis={currentAnalysis}
-          overrides={currentOverrides}
-          sourceUnits={unitization.units}
-          isAnalyzing={isAnalyzing}
-          selectedSegmentIds={selectedSegmentIds}
-          onSelectSegment={handleSelectSegment}
-          onUpdateSegmentOverride={handleUpdateSegmentOverride}
-          onResetSegmentOverride={handleResetSegmentOverride}
-          onUpdateMovementOverride={handleUpdateMovementOverride}
-          onResetMovementOverride={handleResetMovementOverride}
-          onAddGroup={handleAddGroup}
-          onRemoveGroup={handleRemoveGroup}
-          onSelectGroup={handleSelectGroup}
-          onClearSelection={() => setSelectedSegmentIds([])}
-          onDragOverride={handleDragOverride}
-          onDragEnd={handleDragEnd}
-          analysisId={currentAnalysisId}
-          modelId={settings.modelId}
-        />
-      </div>
+        <ResizablePanel
+          id="graph-workspace"
+          defaultSize="60%"
+          minSize="35%"
+        >
+          <GraphViewport
+            analysis={currentAnalysis}
+            overrides={currentOverrides}
+            sourceUnits={unitization.units}
+            isAnalyzing={isAnalyzing}
+            selectedSegmentIds={selectedSegmentIds}
+            onSelectSegment={handleSelectSegment}
+            onUpdateSegmentOverride={handleUpdateSegmentOverride}
+            onResetSegmentOverride={handleResetSegmentOverride}
+            onUpdateMovementOverride={handleUpdateMovementOverride}
+            onResetMovementOverride={handleResetMovementOverride}
+            onAddGroup={handleAddGroup}
+            onRemoveGroup={handleRemoveGroup}
+            onSelectGroup={handleSelectGroup}
+            onClearSelection={() => setSelectedSegmentIds([])}
+            onDragOverride={handleDragOverride}
+            onDragEnd={handleDragEnd}
+            analysisId={currentAnalysisId}
+            modelId={settings.modelId}
+          />
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       {/* Bottom Status Bar with Compact Error Area */}
       <StatusBar

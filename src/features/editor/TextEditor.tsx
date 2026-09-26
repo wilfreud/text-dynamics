@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose } from "lucide-react";
 import { Button } from "../../components/ui/button";
 
 export interface EditorSelectionRange {
@@ -12,7 +12,7 @@ export interface EditorSelectionRange {
 interface TextEditorProps {
   content: string;
   onChange: (value: string) => void;
-  collapsed: boolean;
+  collapsed?: boolean;
   onToggleCollapse: () => void;
   selectedRange?: EditorSelectionRange | null;
   onCursorChange?: (cursorOffset: number) => void;
@@ -21,7 +21,6 @@ interface TextEditorProps {
 export function TextEditor({
   content,
   onChange,
-  collapsed,
   onToggleCollapse,
   selectedRange,
   onCursorChange,
@@ -85,37 +84,15 @@ export function TextEditor({
     onCursorChange(offset);
   }
 
-  if (collapsed) {
-    return (
-      <aside className="flex flex-col items-center border-r border-border/70 bg-card py-3 px-1 transition-all select-none">
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={onToggleCollapse}
-          className="text-muted-foreground hover:text-foreground"
-          title="Expand Text Editor"
-        >
-          <PanelLeftOpen className="size-4" />
-        </Button>
-        <span
-          className="mt-6 font-mono text-[10px] tracking-wider uppercase text-muted-foreground rotate-90 whitespace-nowrap cursor-pointer hover:text-foreground"
-          onClick={onToggleCollapse}
-        >
-          Text Editor
-        </span>
-      </aside>
-    );
-  }
-
   return (
-    <aside className="relative flex h-full flex-col border-r border-border/70 bg-card transition-all w-80 sm:w-96 md:w-[420px] shrink-0">
+    <aside className="relative flex h-full w-full min-w-0 flex-col bg-card select-none">
       {/* Editor Header */}
       <div className="flex h-9 items-center justify-between border-b border-border/70 px-3 py-1 bg-muted/20 select-none">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-mono text-xs font-medium uppercase tracking-wider text-muted-foreground truncate">
             Source Text
           </span>
-          <span className="text-[11px] font-mono text-muted-foreground/80">
+          <span className="text-[11px] font-mono text-muted-foreground/80 shrink-0">
             ({lineCount} {lineCount === 1 ? "line" : "lines"})
           </span>
         </div>
@@ -123,7 +100,7 @@ export function TextEditor({
           variant="ghost"
           size="icon-xs"
           onClick={onToggleCollapse}
-          className="text-muted-foreground hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground shrink-0"
           title="Collapse Text Editor"
         >
           <PanelLeftClose className="size-3.5" />

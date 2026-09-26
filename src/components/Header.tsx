@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "./ui/button";
-import { Play, Settings, FolderOpen, Loader2 } from "lucide-react";
+import { Play, Settings, FolderOpen, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 interface HeaderProps {
   documentTitle: string;
@@ -10,6 +10,8 @@ interface HeaderProps {
   onAnalyze: () => void;
   isAnalyzing: boolean;
   canAnalyze: boolean;
+  onToggleEditor?: () => void;
+  isEditorCollapsed?: boolean;
 }
 
 export function Header({
@@ -20,6 +22,8 @@ export function Header({
   onAnalyze,
   isAnalyzing,
   canAnalyze,
+  onToggleEditor,
+  isEditorCollapsed = false,
 }: HeaderProps) {
   const [title, setTitle] = useState(documentTitle);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -61,6 +65,22 @@ export function Header({
           <FolderOpen className="size-3.5" />
           <span>Documents</span>
         </Button>
+
+        {onToggleEditor && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onToggleEditor}
+            className="text-muted-foreground hover:text-foreground shrink-0"
+            title={isEditorCollapsed ? "Expand Source Text Editor" : "Collapse Source Text Editor"}
+          >
+            {isEditorCollapsed ? (
+              <PanelLeftOpen className="size-4" />
+            ) : (
+              <PanelLeftClose className="size-4" />
+            )}
+          </Button>
+        )}
 
         <div className="h-4 w-px bg-border/80 shrink-0" />
 

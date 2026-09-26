@@ -53,3 +53,11 @@ The task files are intentionally more precise than these launcher prompts. Paste
 ## 11 — live Gemini model catalog + Free/Paid labels
 
 `Read _agent-bootstrap/prompts/11_dynamic_gemini_model_catalog.md and execute it completely. Follow AGENTS.md and load tiger-style, rust-tauri-guardrails, gemini-structured-output, and observability-debugging. Replace the Gemini model text input with the live classified select and stop when this task is complete.`
+
+## 12 — resizable workspace with shadcn splits
+
+`Read _agent-bootstrap/prompts/12_resizable_workspace_shadcn.md and execute it completely. Follow AGENTS.md and the existing project guardrails. Do not perform unrelated redesign or refactoring.`
+
+## 13 — Keychain + SQLite diagnosis & fix
+
+`Read _agent-bootstrap/prompts/13_diagnose_keychain_sqlite_persistence.md and execute it completely. Follow AGENTS.md and the existing project guardrails. Diagnose the current implementation before changing code, then fix credential persistence and verify the real SQLite runtime path. Do not perform unrelated refactoring.`

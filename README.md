@@ -7,6 +7,7 @@ A local-first desktop application built with **Tauri v2**, **Rust**, and **React
 ## Key Features
 
 - **Monochrome Editorial UI**: Distraction-free, typography-focused reading and writing environment.
+- **Fluid Resizable Workspace**: Accessible horizontal split powered by shadcn Resizable (`react-resizable-panels`), supporting keyboard navigation, collapse/expand toggle, and persisted layout across sessions.
 - **Deterministic Text Unitization**: Splits poetry and prose into ordered, immutable semantic units (`u0001`, `u0002`...) preserving exact UTF-16 code unit offsets.
 - **Gemini Structured Output**: Directly queries Gemini from native Rust over HTTPS with strict JSON schema constraints and semantic validation rules.
 - **Live Classified Model Catalog**: Discovers available models live via `models.list`, presenting verified Standard API billing tiers (`Free tier` vs. `Paid only`), context windows, and thinking capabilities.
