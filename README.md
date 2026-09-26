@@ -9,6 +9,7 @@ A local-first desktop application built with **Tauri v2**, **Rust**, and **React
 - **Monochrome Editorial UI**: Distraction-free, typography-focused reading and writing environment.
 - **Deterministic Text Unitization**: Splits poetry and prose into ordered, immutable semantic units (`u0001`, `u0002`...) preserving exact UTF-16 code unit offsets.
 - **Gemini Structured Output**: Directly queries Gemini from native Rust over HTTPS with strict JSON schema constraints and semantic validation rules.
+- **Live Classified Model Catalog**: Discovers available models live via `models.list`, presenting verified Standard API billing tiers (`Free tier` vs. `Paid only`), context windows, and thinking capabilities.
 - **Custom SVG Graph Engine**: Renders dynamic metric curves (Intensity, Tension, Valence, Temperature) with movement-directed geometry (`crescendo`, `decrescendo`, `drop`, `spike`, `rupture`, `plateau`, `oscillation`).
 - **Interactive Overrides & Grouping**: Drag nodes to override values in real time, customize movement kinds, and cluster segments into named families without mutating the underlying canonical AI analysis.
 - **Secure OS Credential Storage**: Uses the native OS Keychain (`security-framework` on macOS, Credential Manager on Windows, Secret Service on Linux) to store API keys. Keys are never saved to SQLite, logged, or exposed to frontend storage.
@@ -51,7 +52,7 @@ Text Dynamics requires a Google Gemini API key to run structural analyses:
 2. Click the **Settings** (gear) icon in the top header navigation.
 3. Paste your Gemini API key in the **Gemini API Key** field.
 4. Click **Save Key**.
-5. Once saved, a green badge will confirm `Configured in OS Keyring`.
+5. Once saved, a confirmation badge confirms `Key configured` and the **Gemini Model** dropdown automatically populates with available text-generation models, displaying their Free tier vs. Paid only status and context limits.
 
 > **Security Note**: Your API key is stored strictly within your operating system's native keychain. It is never logged to disk, transmitted to any third party other than Google's Gemini endpoint, or stored in local SQLite databases.
 
@@ -86,6 +87,7 @@ To inspect development logs safely with bounded line counts:
 Detailed architectural and operational documentation is available in `docs/`:
 
 - [Architecture & Data Flow](file:///Users/wilfried/Developer/experiments/text-dynamics/docs/architecture.md) — System boundaries, IPC commands, SQLite persistence, and UI layout.
-- [Gemini Analysis Pipeline](file:///Users/wilfried/Developer/experiments/text-dynamics/docs/gemini-analysis.md) — Structured JSON schema, validation rules, retry loops, and error mapping.
+- [Gemini Analysis Pipeline](file:///Users/wilfried/Developer/experiments/text-dynamics/docs/gemini-analysis.md) — Structured JSON schema, live model catalog, validation rules, retry loops, and error mapping.
 - [Dynamic Graph Engine](file:///Users/wilfried/Developer/experiments/text-dynamics/docs/graph.md) — Metric definitions, movement path generation, drag overrides, and Anime.js animations.
 - [Debugging & Observability](file:///Users/wilfried/Developer/experiments/text-dynamics/docs/debugging.md) — Log pipelines, diagnostic scripts, secret redaction, and troubleshooting.
+- [Implementation Report](file:///Users/wilfried/Developer/experiments/text-dynamics/docs/implementation-report.md) — Comprehensive technical inventory, dependencies, and audit summary.

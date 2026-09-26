@@ -53,3 +53,10 @@ pub fn set_api_key(state: State<'_, AppState>, api_key: String) -> Result<(), Ap
 pub fn delete_api_key(state: State<'_, AppState>) -> Result<(), AppError> {
     state.secrets.delete_api_key()
 }
+
+#[tauri::command]
+pub async fn list_gemini_models(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::gemini::GeminiModelOption>, AppError> {
+    state.analysis.list_models().await
+}

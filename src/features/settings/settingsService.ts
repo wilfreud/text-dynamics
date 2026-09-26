@@ -2,6 +2,7 @@ import {
   ipcDeleteApiKey,
   ipcGetSetting,
   ipcHasApiKey,
+  ipcListGeminiModels,
   ipcSaveSetting,
   ipcSetApiKey,
 } from "../../lib/tauri/ipc";
@@ -61,13 +62,16 @@ export async function saveSetting(key: string, value: string): Promise<void> {
 
 export async function loadAppSettings(): Promise<AppSettings> {
   const hasApiKey = await checkApiKeyPresence();
-  const modelId = await loadSetting("gemini_model", "gemini-3.8-flash");
+  let modelId = await loadSetting("model_id", "");
+  if (!modelId) {
+    modelId = await loadSetting("gemini_model", "gemini-3.8-flash");
+  }
   const customInstruction = await loadSetting("custom_instruction", "");
   const theme = (await loadSetting("theme", "system")) as AppSettings["theme"];
 
   return {
     hasApiKey,
-    modelId,
+    modelId: modelId || "gemini-3.8-flash",
     customInstruction,
     theme,
   };
@@ -77,6 +81,7 @@ export async function saveAppSettings(
   settings: Partial<Omit<AppSettings, "hasApiKey">>
 ): Promise<void> {
   if (settings.modelId !== undefined) {
+    await saveSetting("model_id", settings.modelId);
     await saveSetting("gemini_model", settings.modelId);
   }
   if (settings.customInstruction !== undefined) {
@@ -86,3 +91,16 @@ export async function saveAppSettings(
     await saveSetting("theme", settings.theme);
   }
 }
+
+export async function fetchGeminiModelCatalog(): Promise<import("./types").GeminiModelOption[]> {
+  const dtos = await ipcListGeminiModels();
+  return dtos.map((dto) => ({
+    id: dto.id,
+    displayName: dto.display_name,
+    inputTokenLimit: dto.input_token_limit,
+    outputTokenLimit: dto.output_token_limit,
+    thinking: dto.thinking,
+    billingAvailability: dto.billing_availability,
+  }));
+}
+

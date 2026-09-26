@@ -61,7 +61,8 @@ text-dynamics/
         │   ├── documents.rs             # Document CRUD operations
         │   └── analyses.rs              # Immutable analysis records & override persistence
         ├── gemini/                      # Direct HTTPS Gemini REST client
-        │   ├── client.rs                # Request dispatcher with exponential backoff retry loop
+        │   ├── catalog.rs               # Candidate filtering, billing classification & catalog sorting
+        │   ├── client.rs                # Request dispatcher with exponential backoff & list_models
         │   └── schema.rs                # Strict OpenAPI/JSON schema definitions for Gemini
         ├── analysis/                    # Structural analysis processing
         │   ├── model.rs                 # Canonical domain structs matching schema
@@ -129,7 +130,8 @@ All persistence is managed locally by SQLite (`rusqlite`) in `~/Library/Applicat
 ## 4. Gemini Structured Integration Summary
 
 - **Provider**: Google Gemini REST API (`https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`).
-- **Default Model**: `gemini-3.8-flash` (configurable in Settings).
+- **Live Model Catalog**: Dynamic model discovery via `models.list` API endpoint, filtering for text-generation candidates, and classifying Free tier vs. Paid only against official pricing docs (snapshot `2026-09-26`).
+- **Default Model**: `gemini-3.8-flash` (configurable in Settings via live classified select).
 - **Prompt Version**: `text-dynamics-1` (immutable core prompt instructions).
 - **Schema Version**: `1.0` (validated against `CanonicalAnalysis` schema).
 - **Deterministic Unitization**: Text is split into indexed units (`u0001`, `u0002`...) preserving exact UTF-16 code unit offsets before the request is generated.

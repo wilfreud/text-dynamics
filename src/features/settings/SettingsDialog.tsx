@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,14 +15,49 @@ import {
   clearApiKey,
   loadAppSettings,
   saveAppSettings,
+  fetchGeminiModelCatalog,
 } from "./settingsService";
-import type { AppSettings } from "./types";
-import { KeyRound, Check, Trash2, ShieldCheck, AlertCircle } from "lucide-react";
+import type { AppSettings, GeminiModelOption, BillingAvailability } from "./types";
+import { parseAppError } from "../../lib/errors";
+import {
+  KeyRound,
+  Check,
+  Trash2,
+  ShieldCheck,
+  AlertCircle,
+  RotateCw,
+  Loader2,
+  Cpu,
+} from "lucide-react";
 
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSettingsSaved?: () => void;
+}
+
+function formatTokenLimit(tokens?: number | null): string {
+  if (!tokens || tokens <= 0) return "";
+  if (tokens >= 1_000_000) {
+    const millions = tokens / 1_000_000;
+    return `${Number.isInteger(millions) ? millions : millions.toFixed(1)}M context`;
+  }
+  if (tokens >= 1_000) {
+    const thousands = Math.round(tokens / 1_000);
+    return `${thousands}k context`;
+  }
+  return `${tokens} tokens`;
+}
+
+function getBillingLabel(billing: BillingAvailability): string {
+  switch (billing) {
+    case "free_tier_available":
+      return "Free tier";
+    case "paid_only":
+      return "Paid only";
+    case "unknown":
+      return "Unknown";
+  }
 }
 
 export function SettingsDialog({
@@ -42,29 +77,71 @@ export function SettingsDialog({
   const [keySaveMessage, setKeySaveMessage] = useState<string | null>(null);
   const [keyErrorMessage, setKeyErrorMessage] = useState<string | null>(null);
 
+  // Model catalog state
+  const [models, setModels] = useState<GeminiModelOption[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [modelLoadError, setModelLoadError] = useState<string | null>(null);
+
   const [modelInput, setModelInput] = useState("gemini-3.8-flash");
   const [instructionInput, setInstructionInput] = useState("");
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
 
+  // Load catalog using stored API key
+  const loadModels = useCallback(async (hasKey: boolean, currentSelectedId?: string) => {
+    if (!hasKey) {
+      setModels([]);
+      setIsLoadingModels(false);
+      setModelLoadError(null);
+      return;
+    }
+
+    setIsLoadingModels(true);
+    setModelLoadError(null);
+
+    try {
+      const catalog = await fetchGeminiModelCatalog();
+      setModels(catalog);
+
+      // Verify or default selection
+      if (catalog.length > 0) {
+        const targetId = currentSelectedId || modelInput;
+        const exists = catalog.some((m) => m.id === targetId);
+        if (!exists && !targetId) {
+          const preferred =
+            catalog.find((m) => m.id === "gemini-3.8-flash") ||
+            catalog.find((m) => m.billingAvailability === "free_tier_available") ||
+            catalog[0];
+          if (preferred) {
+            setModelInput(preferred.id);
+          }
+        }
+      }
+    } catch (err) {
+      const parsed = parseAppError(err);
+      setModelLoadError(parsed.message || "Failed to fetch model catalog.");
+    } finally {
+      setIsLoadingModels(false);
+    }
+  }, [modelInput]);
+
   useEffect(() => {
     if (open) {
-      void loadCurrentSettings();
+      void (async () => {
+        try {
+          const data = await loadAppSettings();
+          setSettings(data);
+          setModelInput(data.modelId);
+          setInstructionInput(data.customInstruction);
+          setNewApiKey("");
+          setKeySaveMessage(null);
+          setKeyErrorMessage(null);
+          void loadModels(data.hasApiKey, data.modelId);
+        } catch {
+          // Handled in service logs
+        }
+      })();
     }
-  }, [open]);
-
-  async function loadCurrentSettings() {
-    try {
-      const data = await loadAppSettings();
-      setSettings(data);
-      setModelInput(data.modelId);
-      setInstructionInput(data.customInstruction);
-      setNewApiKey("");
-      setKeySaveMessage(null);
-      setKeyErrorMessage(null);
-    } catch {
-      // Handled in service logs
-    }
-  }
+  }, [open, loadModels]);
 
   async function handleSaveKey(e: React.FormEvent) {
     e.preventDefault();
@@ -80,7 +157,9 @@ export function SettingsDialog({
       setSettings((prev) => ({ ...prev, hasApiKey: true }));
       setKeySaveMessage("API key saved securely in OS credential store.");
       onSettingsSaved?.();
-    } catch (err) {
+      // Refresh models immediately with the newly stored key
+      void loadModels(true, modelInput);
+    } catch {
       setKeyErrorMessage("Failed to save API key to OS credential store.");
     } finally {
       setIsSavingKey(false);
@@ -96,9 +175,10 @@ export function SettingsDialog({
       await clearApiKey();
       setSettings((prev) => ({ ...prev, hasApiKey: false }));
       setNewApiKey("");
+      setModels([]);
       setKeySaveMessage("API key removed from OS credential store.");
       onSettingsSaved?.();
-    } catch (err) {
+    } catch {
       setKeyErrorMessage("Failed to clear API key.");
     } finally {
       setIsSavingKey(false);
@@ -115,23 +195,34 @@ export function SettingsDialog({
         setSettings((prev) => ({ ...prev, hasApiKey: true }));
       }
 
+      const chosenModel = modelInput.trim() || "gemini-3.8-flash";
       await saveAppSettings({
-        modelId: modelInput.trim() || "gemini-3.8-flash",
+        modelId: chosenModel,
         customInstruction: instructionInput.trim(),
       });
       setSettings((prev) => ({
         ...prev,
-        modelId: modelInput.trim() || "gemini-3.8-flash",
+        modelId: chosenModel,
         customInstruction: instructionInput.trim(),
       }));
       onSettingsSaved?.();
       onOpenChange(false);
-    } catch (err) {
+    } catch {
       setKeyErrorMessage("Failed to save settings or API key.");
     } finally {
       setIsSavingGeneral(false);
     }
   }
+
+  // Active selected model descriptor
+  const activeSelectedModel = useMemo(() => {
+    return models.find((m) => m.id === modelInput) ?? null;
+  }, [models, modelInput]);
+
+  const isModelUnavailable = useMemo(() => {
+    if (models.length === 0 || isLoadingModels) return false;
+    return !models.some((m) => m.id === modelInput);
+  }, [models, modelInput, isLoadingModels]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -227,21 +318,141 @@ export function SettingsDialog({
 
           <div className="border-t border-border/40" />
 
-          {/* Section: Model Configuration */}
-          <div className="space-y-2">
-            <label className="block font-medium text-foreground">
-              Model Identifier
-            </label>
-            <Input
-              value={modelInput}
-              onChange={(e) => setModelInput(e.target.value)}
-              placeholder="gemini-3.8-flash"
-              className="font-mono text-xs"
-            />
-            <p className="text-xs text-muted-foreground">
-              Default is <code className="rounded bg-muted px-1 py-0.5 text-[11px]">gemini-3.8-flash</code>. You can also specify any compatible Gemini model (e.g. <code className="rounded bg-muted px-1 py-0.5 text-[11px]">gemini-2.5-flash</code> or <code className="rounded bg-muted px-1 py-0.5 text-[11px]">gemini-2.5-pro</code>).
+          {/* Section: Live Model Catalog Select */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-1.5 font-medium text-foreground">
+                <Cpu className="size-3.5 text-muted-foreground" />
+                Gemini Model
+              </label>
+
+              <div className="flex items-center gap-2">
+                {isLoadingModels && (
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Loader2 className="size-3 animate-spin" />
+                    Fetching catalog...
+                  </span>
+                )}
+                {settings.hasApiKey && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void loadModels(true)}
+                    disabled={isLoadingModels}
+                    className="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                    title="Refresh model catalog from Gemini API"
+                  >
+                    <RotateCw className={`size-3 ${isLoadingModels ? "animate-spin" : ""}`} />
+                    <span className="ml-1 text-[10px]">Refresh</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Select Dropdown */}
+            <div className="relative">
+              <select
+                value={modelInput}
+                onChange={(e) => setModelInput(e.target.value)}
+                disabled={!settings.hasApiKey || (models.length === 0 && isLoadingModels)}
+                className="w-full appearance-none rounded-md border border-input bg-background px-3 py-2 text-xs font-mono text-foreground shadow-xs transition-colors focus:border-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {!settings.hasApiKey ? (
+                  <option value="" disabled>
+                    API key required to load models
+                  </option>
+                ) : models.length === 0 && isLoadingModels ? (
+                  <option value={modelInput} disabled>
+                    {modelInput} (loading catalog...)
+                  </option>
+                ) : (
+                  <>
+                    {/* Preserve currently selected model if it is not in the fetched catalog */}
+                    {isModelUnavailable && (
+                      <option value={modelInput} disabled>
+                        {modelInput} (unavailable / not in catalog)
+                      </option>
+                    )}
+                    {models.map((m) => {
+                      const billing = getBillingLabel(m.billingAvailability);
+                      const context = formatTokenLimit(m.inputTokenLimit);
+                      const parts = [m.displayName, billing];
+                      if (context) parts.push(context);
+                      if (m.thinking) parts.push("thinking");
+                      return (
+                        <option key={m.id} value={m.id}>
+                          {parts.join("  •  ")}
+                        </option>
+                      );
+                    })}
+                  </>
+                )}
+              </select>
+            </div>
+
+            {/* Retryable Error Banner on Fetch Failure */}
+            {modelLoadError && (
+              <div className="flex items-center justify-between rounded border border-border/80 bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5 text-destructive">
+                  <AlertCircle className="size-3.5 shrink-0" />
+                  <span className="text-[11px]">{modelLoadError}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void loadModels(true)}
+                  className="h-6 px-2 text-[11px]"
+                >
+                  Retry
+                </Button>
+              </div>
+            )}
+
+            {/* Warning if persisted model is not present in live catalog */}
+            {isModelUnavailable && (
+              <div className="flex items-center gap-1.5 rounded border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-foreground">
+                <AlertCircle className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="text-[11px]">
+                  Selected model <code className="font-mono">{modelInput}</code> is not in the live catalog. Please select a returned model before running analysis.
+                </span>
+              </div>
+            )}
+
+            {/* Selected Model Detail Row */}
+            {activeSelectedModel && (
+              <div className="flex flex-wrap items-center gap-2 rounded border border-border/50 bg-muted/20 px-2.5 py-1.5 text-[11px]">
+                <span className="font-mono text-foreground">{activeSelectedModel.id}</span>
+                <span className="text-border">|</span>
+                <span className="font-medium text-foreground">
+                  {getBillingLabel(activeSelectedModel.billingAvailability)}
+                </span>
+                {activeSelectedModel.inputTokenLimit && (
+                  <>
+                    <span className="text-border">|</span>
+                    <span className="text-muted-foreground">
+                      {formatTokenLimit(activeSelectedModel.inputTokenLimit)}
+                    </span>
+                  </>
+                )}
+                {activeSelectedModel.thinking && (
+                  <>
+                    <span className="text-border">|</span>
+                    <span className="rounded bg-muted px-1.5 py-0.2 font-mono text-[10px] text-foreground">
+                      thinking
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Models are fetched live from <code className="font-mono text-[10px]">models.list</code>. &ldquo;Free tier&rdquo; indicates Google offers a standard free API tier for this model; actual billing depends on your Google Cloud project tier.
             </p>
           </div>
+
+          <div className="border-t border-border/40" />
 
           {/* Section: Custom Analysis Instruction */}
           <div className="space-y-2">

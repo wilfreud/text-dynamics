@@ -74,6 +74,22 @@ export async function ipcDeleteApiKey(): Promise<void> {
   return invoke<void>("delete_api_key");
 }
 
+export type BillingAvailability = "free_tier_available" | "paid_only" | "unknown";
+
+export interface GeminiModelOptionDto {
+  id: string;
+  display_name: string;
+  input_token_limit?: number | null;
+  output_token_limit?: number | null;
+  thinking: boolean;
+  billing_availability: BillingAvailability;
+}
+
+export async function ipcListGeminiModels(): Promise<GeminiModelOptionDto[]> {
+  logger.debug("IPC: list_gemini_models");
+  return invoke<GeminiModelOptionDto[]>("list_gemini_models");
+}
+
 export interface AnalysisRecordDto {
   id: string;
   document_id: string;

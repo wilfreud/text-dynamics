@@ -24,7 +24,7 @@ Text Dynamics is a local-first desktop application built with **Tauri v2**, **Ru
 │                           Rust Command Layer                            │
 │  analyze_document | get_latest_analysis | save_analysis_overrides       │
 │  create_document  | update_document     | delete_document | list_docs   │
-│  has_api_key      | set_api_key         | delete_api_key                │
+│  has_api_key      | set_api_key         | delete_api_key  | list_models │
 │  get_setting      | save_setting                                        │
 └──────────────────┬─────────────────┬──────────────────┬─────────────────┘
                    │                 │                  │
@@ -123,9 +123,10 @@ src-tauri/src/
 │   ├── mod.rs
 │   ├── analysis.rs             # analyze_document, get_latest_analysis, overrides
 │   ├── documents.rs            # create_document, update_document, delete_document, list
-│   └── settings.rs             # get_setting, save_setting, has/set/delete_api_key
+│   └── settings.rs             # get_setting, save_setting, has/set/delete_api_key, list_gemini_models
 ├── gemini/
-│   ├── client.rs               # Direct REST client with exponential backoff & retries
+│   ├── catalog.rs              # Live candidate filtering, billing tiers (Free/Paid), and sorting
+│   ├── client.rs               # Direct REST client (analyze & list_models) with retry loop
 │   └── dto.rs                  # Gemini REST request and response structures
 ├── persistence/
 │   ├── db.rs                   # SQLite migration runner & connection manager

@@ -6,6 +6,10 @@ use serde_json::json;
 use crate::analysis::model::{CanonicalAnalysis, SourceUnit};
 use crate::analysis::validation::validate_canonical_analysis;
 use crate::error::AppError;
+use crate::gemini::catalog::{
+    classify_billing, is_text_analysis_candidate, sort_model_catalog, BillingAvailability,
+    GeminiModelOption, RawGeminiModelDto, RawListModelsResponse,
+};
 use crate::gemini::schema::analysis_response_schema;
 
 const BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -259,6 +263,159 @@ impl GeminiClient {
         );
 
         Ok((analysis, raw_analysis_str.to_string()))
+    }
+
+    pub async fn list_models(
+        &self,
+        api_key: &str,
+        correlation_id: &str,
+    ) -> Result<Vec<GeminiModelOption>, AppError> {
+        let trimmed_key = api_key.trim();
+        if trimmed_key.is_empty() {
+            return Err(AppError::MissingApiKey);
+        }
+
+        let start_time = Instant::now();
+        let mut raw_models: Vec<RawGeminiModelDto> = Vec::new();
+        let mut page_token: Option<String> = None;
+        let mut pages_fetched = 0;
+        const MAX_PAGES: usize = 5;
+
+        loop {
+            pages_fetched += 1;
+            let mut url = format!("{}?pageSize=1000", BASE_URL);
+            if let Some(ref token) = page_token {
+                url.push_str(&format!("&pageToken={}", token));
+            }
+
+            log::debug!(
+                "[req_id={}] Fetching Gemini model catalog page {}...",
+                correlation_id,
+                pages_fetched
+            );
+
+            let res = self
+                .client
+                .get(&url)
+                .header("x-goog-api-key", trimmed_key)
+                .header("content-type", "application/json")
+                .send()
+                .await;
+
+            let response = match res {
+                Ok(resp) => resp,
+                Err(e) => {
+                    log::warn!(
+                        "[req_id={}] Failed to connect to Gemini API: {e}",
+                        correlation_id
+                    );
+                    return Err(AppError::NetworkTimeout(format!(
+                        "Failed to connect to Gemini API: {e}"
+                    )));
+                }
+            };
+
+            let status = response.status();
+            if !status.is_success() {
+                let error_body = response.text().await.unwrap_or_default();
+                let safe_snippet = Self::extract_error_message(&error_body);
+                log::warn!(
+                    "[req_id={}] models.list failed status={} error={}",
+                    correlation_id,
+                    status.as_u16(),
+                    safe_snippet
+                );
+                return match status {
+                    StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
+                        Err(AppError::UnauthorizedApiKey)
+                    }
+                    StatusCode::TOO_MANY_REQUESTS => Err(AppError::RateLimitExceeded(safe_snippet)),
+                    _ if status.is_server_error() => {
+                        Err(AppError::ProviderServerError(status.as_u16(), safe_snippet))
+                    }
+                    _ => Err(AppError::Analysis(format!(
+                        "Failed to fetch model catalog ({}): {}",
+                        status.as_u16(),
+                        safe_snippet
+                    ))),
+                };
+            }
+
+            let body_text = response.text().await.map_err(|e| {
+                AppError::NetworkTimeout(format!("Failed reading response body: {e}"))
+            })?;
+
+            let parsed: RawListModelsResponse = serde_json::from_str(&body_text).map_err(|e| {
+                AppError::MalformedResponse(format!("Invalid model-list JSON: {e}"))
+            })?;
+
+            raw_models.extend(parsed.models);
+
+            if let Some(token) = parsed.next_page_token {
+                if !token.is_empty() && pages_fetched < MAX_PAGES {
+                    page_token = Some(token);
+                    continue;
+                }
+            }
+            break;
+        }
+
+        let total_raw = raw_models.len();
+        let candidates: Vec<RawGeminiModelDto> = raw_models
+            .into_iter()
+            .filter(is_text_analysis_candidate)
+            .collect();
+
+        let mut free_count = 0;
+        let mut paid_count = 0;
+        let mut unknown_count = 0;
+
+        let mut model_options: Vec<GeminiModelOption> = candidates
+            .into_iter()
+            .map(|raw| {
+                let id = raw
+                    .name
+                    .strip_prefix("models/")
+                    .unwrap_or(&raw.name)
+                    .to_string();
+                let display_name = raw.display_name.unwrap_or_else(|| id.clone());
+                let billing = classify_billing(&id);
+                match billing {
+                    BillingAvailability::FreeTierAvailable => free_count += 1,
+                    BillingAvailability::PaidOnly => paid_count += 1,
+                    BillingAvailability::Unknown => unknown_count += 1,
+                }
+                let thinking = match raw.thinking {
+                    Some(serde_json::Value::Bool(b)) => b,
+                    Some(serde_json::Value::Object(map)) => !map.is_empty(),
+                    _ => false,
+                };
+
+                GeminiModelOption {
+                    id,
+                    display_name,
+                    input_token_limit: raw.input_token_limit,
+                    output_token_limit: raw.output_token_limit,
+                    thinking,
+                    billing_availability: billing,
+                }
+            })
+            .collect();
+
+        sort_model_catalog(&mut model_options);
+
+        log::info!(
+            "[req_id={}] models.list completed in {}ms: raw={} candidates={} (free={} paid={} unknown={})",
+            correlation_id,
+            start_time.elapsed().as_millis(),
+            total_raw,
+            model_options.len(),
+            free_count,
+            paid_count,
+            unknown_count
+        );
+
+        Ok(model_options)
     }
 
     fn extract_error_message(error_body: &str) -> String {

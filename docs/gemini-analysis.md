@@ -26,6 +26,18 @@ This document details the Gemini analysis integration, prompt versioning, struct
 
 ---
 
+### 2.1 Dynamic Model Catalog & Billing Classification
+
+- **Live Provider Catalog**: Available models are fetched live through the Rust backend via `GET https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000` using the stored OS Keyring API key.
+- **Candidate Filtering**: Only models supporting `generateContent`, belonging to the `gemini-*` family, and providing structured text generation are presented. Specialized audio, live/realtime, image, and embedding models are excluded.
+- **Pricing & Billing Metadata**: The Google Gemini `models.list` API endpoint returns model capabilities and context limits, but **does not provide pricing or free/paid tier metadata**.
+- **Verified Billing Catalog**: Billing tier badges (`Free tier` vs. `Paid only`) are assigned by a small local catalog verified against official pricing documentation ([Google AI Gemini Pricing](https://ai.google.dev/gemini-api/docs/pricing)). Snapshot date: **2026-09-26**.
+- **Unknown Models**: Newly returned or unmapped models are explicitly labeled `Unknown` rather than guessed using naming heuristics.
+- **Free Tier Semantics**: `Free tier` indicates that Google offers a standard free tier quota for this model; actual account charges still depend on the user's Google Cloud project billing configuration.
+
+---
+
+
 ## 3. The Analysis Request Pipeline
 
 1. **Deterministic Unitization**:

@@ -127,6 +127,14 @@ impl AnalysisService {
     ) -> Result<Option<AnalysisOverridesRecord>, AppError> {
         get_overrides(&self.db, analysis_id)
     }
+
+    pub async fn list_models(&self) -> Result<Vec<crate::gemini::GeminiModelOption>, AppError> {
+        let api_key = self.secrets.get_api_key()?.ok_or(AppError::MissingApiKey)?;
+        let correlation_id = format!("req_{}", Uuid::new_v4().simple());
+        self.gemini_client
+            .list_models(&api_key, &correlation_id)
+            .await
+    }
 }
 
 #[cfg(test)]

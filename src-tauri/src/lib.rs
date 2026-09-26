@@ -58,6 +58,7 @@ pub fn run() {
             commands::settings::has_api_key,
             commands::settings::set_api_key,
             commands::settings::delete_api_key,
+            commands::settings::list_gemini_models,
             commands::analysis::analyze_document,
             commands::analysis::get_latest_analysis,
             commands::analysis::save_analysis_overrides,
