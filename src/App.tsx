@@ -519,6 +519,7 @@ export default function App() {
           maxSize="65%"
           collapsible={true}
           collapsedSize="0%"
+          className="flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden"
           onResize={(size) => {
             setEditorCollapsed(size.asPercentage === 0);
           }}
@@ -540,6 +541,7 @@ export default function App() {
           id="graph-workspace"
           defaultSize="60%"
           minSize="35%"
+          className="flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden"
         >
           <GraphViewport
             analysis={currentAnalysis}

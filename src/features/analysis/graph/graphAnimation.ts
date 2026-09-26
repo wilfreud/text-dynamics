@@ -36,10 +36,9 @@ export function createGraphAnimationScope(rootElement: SVGElement | HTMLElement)
 
       animate(".nodes g", {
         opacity: [0, 1],
-        scale: [0.6, 1],
         delay: stagger(25, { start: 50 }),
         duration: 300,
-        ease: "outBack(1.3)",
+        ease: "outQuad",
       });
 
       animate(".phase-bands", {
@@ -68,10 +67,10 @@ export function createGraphAnimationScope(rootElement: SVGElement | HTMLElement)
         ease: "outQuad",
       });
 
-      animate(".nodes g circle", {
-        scale: [0.85, 1],
+      animate(".nodes g", {
+        opacity: [0.5, 1],
         duration: 220,
-        ease: "outBack(1.1)",
+        ease: "outQuad",
       });
     });
   }
@@ -81,7 +80,7 @@ export function createGraphAnimationScope(rootElement: SVGElement | HTMLElement)
 
     scope.add(() => {
       animate(targetElement, {
-        scale: [1, 1.25, 1],
+        opacity: [0.6, 1],
         duration: 250,
         ease: "outQuad",
       });

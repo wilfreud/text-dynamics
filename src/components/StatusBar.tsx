@@ -87,7 +87,14 @@ export function StatusBar({
 
         {/* Right: Model & Key Indicator */}
         <div className="flex items-center gap-3">
-          <span title="Configured model identifier">{modelId}</span>
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="cursor-pointer hover:text-foreground hover:underline transition-colors"
+            title="Click to configure model in Settings"
+          >
+            {modelId}
+          </button>
           <span>•</span>
           {apiKeyStatus?.state === "error" ? (
             <span

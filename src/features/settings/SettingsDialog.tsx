@@ -88,7 +88,7 @@ export function SettingsDialog({
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
 
   // Load catalog using stored API key
-  const loadModels = useCallback(async (hasKey: boolean, currentSelectedId?: string) => {
+  const loadModels = useCallback(async (hasKey: boolean) => {
     if (!hasKey) {
       setModels([]);
       setIsLoadingModels(false);
@@ -102,46 +102,39 @@ export function SettingsDialog({
     try {
       const catalog = await fetchGeminiModelCatalog();
       setModels(catalog);
-
-      // Verify or default selection
-      if (catalog.length > 0) {
-        const targetId = currentSelectedId || modelInput;
-        const exists = catalog.some((m) => m.id === targetId);
-        if (!exists && !targetId) {
-          const preferred =
-            catalog.find((m) => m.id === "gemini-3.8-flash") ||
-            catalog.find((m) => m.billingAvailability === "free_tier_available") ||
-            catalog[0];
-          if (preferred) {
-            setModelInput(preferred.id);
-          }
-        }
-      }
     } catch (err) {
       const parsed = parseAppError(err);
       setModelLoadError(parsed.message || "Failed to fetch model catalog.");
     } finally {
       setIsLoadingModels(false);
     }
-  }, [modelInput]);
+  }, []);
 
   useEffect(() => {
-    if (open) {
-      void (async () => {
-        try {
-          const data = await loadAppSettings();
-          setSettings(data);
-          setModelInput(data.modelId);
-          setInstructionInput(data.customInstruction);
-          setNewApiKey("");
-          setKeySaveMessage(null);
-          setKeyErrorMessage(null);
-          void loadModels(data.hasApiKey, data.modelId);
-        } catch {
-          // Handled in service logs
+    if (!open) return;
+
+    let isMounted = true;
+    void (async () => {
+      try {
+        const data = await loadAppSettings();
+        if (!isMounted) return;
+        setSettings(data);
+        setModelInput(data.modelId);
+        setInstructionInput(data.customInstruction);
+        setNewApiKey("");
+        setKeySaveMessage(null);
+        setKeyErrorMessage(null);
+        if (data.hasApiKey) {
+          void loadModels(true);
         }
-      })();
-    }
+      } catch {
+        // Handled in service logs
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
   }, [open, loadModels]);
 
   async function handleSaveKey(e: React.FormEvent) {
@@ -163,7 +156,7 @@ export function SettingsDialog({
       setKeySaveMessage("API key saved securely in OS credential store.");
       onSettingsSaved?.();
       // Refresh models immediately with the newly stored key
-      void loadModels(true, modelInput);
+      void loadModels(true);
     } catch {
       setKeyErrorMessage("Failed to save API key to OS credential store.");
     } finally {
@@ -368,7 +361,17 @@ export function SettingsDialog({
             <div className="relative">
               <select
                 value={modelInput}
-                onChange={(e) => setModelInput(e.target.value)}
+                onChange={async (e) => {
+                  const newModel = e.target.value;
+                  setModelInput(newModel);
+                  try {
+                    await saveAppSettings({ modelId: newModel });
+                    setSettings((prev) => ({ ...prev, modelId: newModel }));
+                    onSettingsSaved?.();
+                  } catch {
+                    // Handled in service logs
+                  }
+                }}
                 disabled={!settings.hasApiKey || (models.length === 0 && isLoadingModels)}
                 className="w-full appearance-none rounded-md border border-input bg-background px-3 py-2 text-xs font-mono text-foreground shadow-xs transition-colors focus:border-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >

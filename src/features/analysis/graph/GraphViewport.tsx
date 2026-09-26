@@ -18,6 +18,7 @@ import { GraphTooltip, type TooltipTarget } from "./GraphTooltip";
 import { SegmentInspector } from "./SegmentInspector";
 import { MovementInspector } from "./MovementInspector";
 import { GroupManager } from "./GroupManager";
+import { MetricHelpDialog } from "./MetricHelpDialog";
 import { Activity, Loader2, Info } from "lucide-react";
 
 interface GraphViewportProps {
@@ -71,26 +72,49 @@ export function GraphViewport({
   const [hoverTarget, setHoverTarget] = useState<TooltipTarget | null>(null);
   const [inspectedMovementId, setInspectedMovementId] = useState<string | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
+  const [isMetricHelpOpen, setIsMetricHelpOpen] = useState(false);
 
   // ResizeObserver to react to container size changes (editor collapse/expand or window resize)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      const w = Math.floor(rect.width);
+      const h = Math.floor(rect.height);
+      if (w > 0 && h > 0) {
+        setDimensions((prev) => {
+          if (prev.width === w && prev.height === h) return prev;
+          return { width: w, height: h };
+        });
+      }
+    };
+
+    // Measure immediately upon mount
+    measure();
+
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0) {
-          setDimensions({
-            width: Math.floor(width),
-            height: Math.floor(height),
+        const w = Math.floor(width);
+        const h = Math.floor(height);
+        if (w > 0 && h > 0) {
+          setDimensions((prev) => {
+            if (prev.width === w && prev.height === h) return prev;
+            return { width: w, height: h };
           });
         }
       }
     });
 
     observer.observe(el);
-    return () => observer.disconnect();
+    window.addEventListener("resize", measure);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
   }, []);
 
   const currentDescriptor = METRIC_DESCRIPTORS[selectedMetric];
@@ -151,37 +175,10 @@ export function GraphViewport({
     onDragOverride(segmentId, selectedMetric, newValue);
   }
 
-  if (!analysis && !isAnalyzing) {
-    return (
-      <main className="relative flex flex-1 flex-col items-center justify-center p-8 text-center select-none bg-background">
-        <div className="max-w-md space-y-4">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-lg border border-border/80 bg-muted/20">
-            <Activity className="size-6 text-muted-foreground" />
-          </div>
-          <div className="space-y-1.5">
-            <h2 className="font-heading text-base font-semibold tracking-tight text-foreground">
-              Dynamic Structure Graph
-            </h2>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Enter or paste a poem in the editor and click{" "}
-              <strong className="font-medium text-foreground">Analyze</strong> in
-              the top bar to render its dynamic structural graph.
-            </p>
-          </div>
-          <div className="pt-2">
-            <span className="font-mono text-[11px] text-muted-foreground/70">
-              Provider: {modelId} • Custom SVG Semantic Graph
-            </span>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
   return (
-    <main className="relative flex flex-1 flex-col overflow-hidden bg-background">
+    <main className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden bg-background">
       {/* Top Controls: Metric Selector & Status */}
-      <div className="flex h-11 items-center justify-between border-b border-border/70 px-4 py-2 bg-card select-none">
+      <div className="flex h-11 shrink-0 items-center justify-between border-b border-border/70 px-4 py-2 bg-card select-none">
         {/* Metric Selector Buttons */}
         <div className="flex items-center gap-1">
           {(["intensity", "tension", "valence", "temperature"] as MetricKind[]).map(
@@ -207,21 +204,22 @@ export function GraphViewport({
           )}
         </div>
 
-        {/* Selected Metric Help / Semantic Summary */}
-        <div className="flex items-center gap-3">
-          {analysis && (
-            <div className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
-              <Info className="size-3.5" />
-              <span className="max-w-xs truncate font-sans text-[11px] text-muted-foreground">
-                {currentDescriptor.description}
-              </span>
-            </div>
-          )}
+        {/* Metric Info Button & Semantic Summary */}
+        <div className="flex items-center gap-2">
           {analysis?.overall.dominantShape && (
             <span className="rounded bg-muted px-2 py-0.5 font-mono text-[11px] text-foreground">
               {analysis.overall.dominantShape}
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => setIsMetricHelpOpen(true)}
+            title={`Definitions & examples (${currentDescriptor.label})`}
+            aria-label={`Open metric guide for ${currentDescriptor.label}`}
+            className="flex h-6 w-6 items-center justify-center rounded border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground cursor-pointer"
+          >
+            <Info className="size-3.5" />
+          </button>
         </div>
       </div>
 
@@ -234,8 +232,31 @@ export function GraphViewport({
       )}
 
       {/* Main SVG Graph Container */}
-      <div ref={containerRef} className="relative flex-1 overflow-hidden">
-        {viewModel && (
+      <div ref={containerRef} className="relative flex-1 min-h-0 min-w-0 w-full h-full overflow-hidden">
+        {!analysis && !isAnalyzing ? (
+          <div className="flex h-full w-full flex-col items-center justify-center p-8 text-center select-none bg-background">
+            <div className="max-w-md space-y-4">
+              <div className="mx-auto flex size-12 items-center justify-center rounded-lg border border-border/80 bg-muted/20">
+                <Activity className="size-6 text-muted-foreground" />
+              </div>
+              <div className="space-y-1.5">
+                <h2 className="font-heading text-base font-semibold tracking-tight text-foreground">
+                  Dynamic Structure Graph
+                </h2>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Enter or paste a poem in the editor and click{" "}
+                  <strong className="font-medium text-foreground">Analyze</strong> in
+                  the top bar to render its dynamic structural graph.
+                </p>
+              </div>
+              <div className="pt-2">
+                <span className="font-mono text-[11px] text-muted-foreground/70">
+                  Provider: {modelId} • Custom SVG Semantic Graph
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : viewModel ? (
           <>
             <GraphRenderer
               viewModel={viewModel}
@@ -255,7 +276,7 @@ export function GraphViewport({
               containerHeight={dimensions.height}
             />
           </>
-        )}
+        ) : null}
 
         {/* Segment Inspector Popover */}
         {singleSelectedSegment && isInspectorOpen && (
@@ -291,6 +312,13 @@ export function GraphViewport({
           onDeleteGroup={onRemoveGroup}
           onSelectGroup={onSelectGroup}
           onClearSelection={onClearSelection}
+        />
+
+        {/* Metric Definitions & Examples Modal */}
+        <MetricHelpDialog
+          open={isMetricHelpOpen}
+          onOpenChange={setIsMetricHelpOpen}
+          initialMetric={selectedMetric}
         />
       </div>
     </main>

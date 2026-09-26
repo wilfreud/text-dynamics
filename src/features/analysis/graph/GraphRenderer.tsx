@@ -151,7 +151,8 @@ export function GraphRenderer({
       ref={svgRef}
       width={viewport.width}
       height={viewport.height}
-      className={`overflow-visible select-none text-foreground ${
+      viewBox={`0 0 ${viewport.width} ${viewport.height}`}
+      className={`block w-full h-full overflow-visible select-none text-foreground ${
         dragState?.hasMoved ? "cursor-ns-resize" : ""
       }`}
       aria-label="Dynamic structural graph"
@@ -402,6 +403,17 @@ export function GraphRenderer({
                 />
               )}
 
+              {/* Concentric Hover Ring (stays strictly anchored at point.x, point.y) */}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={point.isOverridden ? "8.5" : "7.5"}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                className="text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+              />
+
               {/* Node Outer Circle */}
               <circle
                 cx={point.x}
@@ -410,7 +422,7 @@ export function GraphRenderer({
                 fill="var(--color-background)"
                 stroke="currentColor"
                 strokeWidth={isSelected ? "2.5" : "2"}
-                className="text-foreground transition-transform group-hover:scale-125"
+                className="text-foreground transition-colors group-hover:stroke-foreground"
               />
 
               {/* User Override Inner Dot */}
