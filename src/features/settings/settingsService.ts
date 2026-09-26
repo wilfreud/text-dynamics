@@ -6,6 +6,7 @@ import {
   ipcSetApiKey,
 } from "../../lib/tauri/ipc";
 import { getLogger } from "../../lib/logging";
+import type { AppSettings } from "./types";
 
 const logger = getLogger(["settings"]);
 
@@ -55,5 +56,33 @@ export async function saveSetting(key: string, value: string): Promise<void> {
   } catch (error) {
     logger.error("Failed to save setting key={key}: {error}", { key, error: String(error) });
     throw error;
+  }
+}
+
+export async function loadAppSettings(): Promise<AppSettings> {
+  const hasApiKey = await checkApiKeyPresence();
+  const modelId = await loadSetting("gemini_model", "gemini-3.8-flash");
+  const customInstruction = await loadSetting("custom_instruction", "");
+  const theme = (await loadSetting("theme", "system")) as AppSettings["theme"];
+
+  return {
+    hasApiKey,
+    modelId,
+    customInstruction,
+    theme,
+  };
+}
+
+export async function saveAppSettings(
+  settings: Partial<Omit<AppSettings, "hasApiKey">>
+): Promise<void> {
+  if (settings.modelId !== undefined) {
+    await saveSetting("gemini_model", settings.modelId);
+  }
+  if (settings.customInstruction !== undefined) {
+    await saveSetting("custom_instruction", settings.customInstruction);
+  }
+  if (settings.theme !== undefined) {
+    await saveSetting("theme", settings.theme);
   }
 }

@@ -73,3 +73,60 @@ export async function ipcDeleteApiKey(): Promise<void> {
   logger.debug("IPC: delete_api_key");
   return invoke<void>("delete_api_key");
 }
+
+export interface AnalysisRecordDto {
+  id: string;
+  document_id: string;
+  schema_version: string;
+  model_id: string;
+  prompt_version: string;
+  raw_analysis_json: string;
+  created_at: string;
+}
+
+export interface AnalysisOverridesRecordDto {
+  analysis_id: string;
+  overrides_json: string;
+  updated_at: string;
+}
+
+export async function ipcAnalyzeDocument(
+  documentId: string,
+  customInstruction?: string,
+  modelOverride?: string
+): Promise<AnalysisRecordDto> {
+  logger.info("IPC: analyze_document doc_id={documentId}", { documentId });
+  return invoke<AnalysisRecordDto>("analyze_document", {
+    documentId,
+    customInstruction,
+    modelOverride,
+  });
+}
+
+export async function ipcGetLatestAnalysis(
+  documentId: string
+): Promise<AnalysisRecordDto | null> {
+  logger.debug("IPC: get_latest_analysis doc_id={documentId}", { documentId });
+  return invoke<AnalysisRecordDto | null>("get_latest_analysis", { documentId });
+}
+
+export async function ipcSaveAnalysisOverrides(
+  analysisId: string,
+  overridesJson: string
+): Promise<AnalysisOverridesRecordDto> {
+  logger.debug("IPC: save_analysis_overrides analysis_id={analysisId}", { analysisId });
+  return invoke<AnalysisOverridesRecordDto>("save_analysis_overrides", {
+    analysisId,
+    overridesJson,
+  });
+}
+
+export async function ipcGetAnalysisOverrides(
+  analysisId: string
+): Promise<AnalysisOverridesRecordDto | null> {
+  logger.debug("IPC: get_analysis_overrides analysis_id={analysisId}", { analysisId });
+  return invoke<AnalysisOverridesRecordDto | null>("get_analysis_overrides", {
+    analysisId,
+  });
+}
+
