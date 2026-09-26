@@ -1,5 +1,5 @@
 import type { SourceUnit } from "../unitization/unitizer";
-import type { CanonicalAnalysis, UserOverrides } from "../types";
+import type { CanonicalAnalysis, MovementKind, UserOverrides } from "../types";
 import {
   METRIC_DESCRIPTORS,
   type GraphGrid,
@@ -10,17 +10,22 @@ import {
   type GraphViewModel,
   type GraphViewportConfig,
   type MetricKind,
+  type CurveInterpolation,
 } from "./graphTypes";
 import { projectEffectiveAnalysis } from "./effectiveAnalysis";
 import { computeGraphGrid, projectX, projectY } from "./graphGeometry";
-import { generateSemanticPathSegment } from "./graphPath";
+import {
+  computeMonotoneCubicControlPoints,
+  generateSemanticPathSegment,
+} from "./graphPath";
 
 export function buildGraphViewModel(
   canonical: CanonicalAnalysis,
   overrides: UserOverrides | undefined,
   sourceUnits: SourceUnit[],
   metricKind: MetricKind,
-  viewport: GraphViewportConfig
+  viewport: GraphViewportConfig,
+  curveInterpolation: CurveInterpolation = "smooth"
 ): GraphViewModel {
   const descriptor = METRIC_DESCRIPTORS[metricKind];
   const { segments: effectiveSegments, movements: effectiveMovements } =
@@ -94,11 +99,15 @@ export function buildGraphViewModel(
   const paths: GraphPathSegment[] = [];
   const segIds = effectiveSegments.map((s) => s.id);
 
-  for (let i = 0; i < points.length - 1; i++) {
-    const p1 = points[i];
-    const p2 = points[i + 1];
+  // Pre-identify movements and discontinuities for all intervals
+  const intervalMovements: Array<MovementKind | "linear"> = new Array(
+    Math.max(0, points.length - 1)
+  );
+  const intervalDiscontinuities: boolean[] = new Array(
+    Math.max(0, points.length - 1)
+  );
 
-    // Find if any movement spans this edge
+  for (let i = 0; i < points.length - 1; i++) {
     const movement = effectiveMovements.find((m) => {
       const sIdx = segIds.indexOf(m.startSegmentId);
       const eIdx = segIds.indexOf(m.endSegmentId);
@@ -106,11 +115,36 @@ export function buildGraphViewModel(
     });
 
     const kind = movement ? movement.kind : "linear";
+    intervalMovements[i] = kind;
+    intervalDiscontinuities[i] =
+      kind === "rupture" ||
+      kind === "reset" ||
+      kind === "drop" ||
+      kind === "plateau" ||
+      kind === "spike";
+  }
+
+  // Compute monotone cubic spline control points if smooth interpolation is enabled
+  const splineControlPoints =
+    curveInterpolation === "smooth"
+      ? computeMonotoneCubicControlPoints(
+          points.map((p) => ({ x: p.x, y: p.y })),
+          (idx) => intervalDiscontinuities[idx]
+        )
+      : null;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const kind = intervalMovements[i];
     const isRupture = kind === "rupture" || kind === "reset";
+    const controlPoint = splineControlPoints ? splineControlPoints[i] : undefined;
+
     const segmentCmd = generateSemanticPathSegment(
       { x: p1.x, y: p1.y },
       { x: p2.x, y: p2.y },
-      kind
+      kind,
+      controlPoint
     );
     const d = `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} ${segmentCmd}`;
 

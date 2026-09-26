@@ -22,17 +22,19 @@ Intensity and Temperature are strictly independent. A stanza may exhibit freezin
 
 ## 2. Path Generation & Semantic Discontinuity (`graphPath.ts`)
 
-Instead of applying a uniform Catmull-Rom or Monotone cubic spline across the whole curve, path geometry between adjacent segment nodes is dynamically governed by the semantic **Movement Kind** connecting them:
+The graph engine supports both **Smooth** (default) and **Linear** modes, switchable via the `Smooth / Linear` toggle in the graph header bar:
 
-- **`drop`**: Sustains the current level across 82% of the segment span, then plunges steeply to the subsequent node.
-- **`spike`**: Transitions abruptly in the first 25% of the span, emphasizing explosive onset.
-- **`plateau`**: Maintains a horizontal hold across 88% of the span before stepping crisply at the boundary.
-- **`crescendo` / `decrescendo`**: Smooth progressive transition modeled by cubic Bézier S-curves with control points at 42% and 58% horizontal progress.
-- **`rupture` / `reset`**: Crisp, orthogonal two-step transition ($L \to L \to L$), explicitly avoiding any curvilinear interpolation.
-- **`oscillation`**: Sinusoidal twin-wave inflection connecting the two states.
-- **`reversal` / `sustain` / default**: Controlled quadratic or linear interpolation.
+- **Monotone Cubic Spline (Fritsch-Carlson)**: In `Smooth` mode, continuous transitions are interpolated via a monotonicity-preserving cubic spline. Tangents at local peaks and valleys are strictly horizontal ($\text{slope} = 0$), preventing overshoot and artificial peaks beyond the data points.
+- **Semantic Movements**: Path geometry between adjacent nodes faithfully reflects dramatic movement semantics without generic oversmoothing:
+  - **`drop`**: Sustains the current level across 82% of the segment span, then plunges steeply to the subsequent node.
+  - **`spike`**: Transitions abruptly in the first 25% of the span, emphasizing explosive onset.
+  - **`plateau`**: Maintains a horizontal hold across 88% of the span before stepping crisply at the boundary.
+  - **`crescendo` / `decrescendo`**: Smooth progressive transition with $C^1$ continuity.
+  - **`rupture` / `reset`**: Crisp, orthogonal two-step transition ($L \to L \to L$), explicitly breaking spline continuity so slopes do not leak across structural shocks.
+  - **`oscillation`**: Sinusoidal twin-wave inflection connecting the two states.
+  - **`reversal` / `sustain` / default**: Controlled quadratic or linear interpolation (or monotone cubic in `Smooth` mode).
 
-> **Visual Discontinuity Principle**: The graph engine explicitly preserves abrupt transitions and structural ruptures. It never applies generic smoothing filters that would obscure intentional textual shocks.
+> **Visual Discontinuity Principle**: The graph engine explicitly preserves abrupt transitions and structural ruptures. It never applies generic smoothing filters that would obscure intentional textual shocks. Continuous spans are smoothly curved, while ruptures and drops remain sharp.
 
 ---
 

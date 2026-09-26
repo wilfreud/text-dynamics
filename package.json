@@ -2,6 +2,12 @@
   "name": "text-dynamics",
   "private": true,
   "version": "0.1.0",
+  "description": "Literary text dynamics visualization",
+  "author": {
+    "name": "Commodore64",
+    "url": "https://commodore64.dev"
+  },
+  "homepage": "https://commodore64.dev",
   "type": "module",
   "scripts": {
     "dev": "vite",

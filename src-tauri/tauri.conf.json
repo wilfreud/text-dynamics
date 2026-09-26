@@ -24,6 +24,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "copyright": "Copyright © 2026 Commodore64. https://commodore64.dev",
+    "publisher": "Commodore64",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

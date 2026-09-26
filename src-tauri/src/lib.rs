@@ -82,6 +82,28 @@ pub fn run() {
             commands::analysis::save_analysis_overrides,
             commands::analysis::get_analysis_overrides,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .on_window_event(|window, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen {
+                has_visible_windows,
+                ..
+            } = event
+            {
+                if !has_visible_windows {
+                    for window in app_handle.webview_windows().values() {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+            }
+        });
 }

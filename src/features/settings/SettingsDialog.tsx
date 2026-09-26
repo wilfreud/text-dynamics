@@ -487,6 +487,22 @@ export function SettingsDialog({
               Appended to the structured analysis prompt sent to the model.
             </p>
           </div>
+
+          {/* Author & Project Info */}
+          <div className="flex items-center justify-between border-t border-border/40 pt-2 text-[11px] text-muted-foreground">
+            <span>Text Dynamics v0.1.0</span>
+            <span>
+              By{" "}
+              <a
+                href="https://commodore64.dev"
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-foreground hover:underline"
+              >
+                Commodore64
+              </a>
+            </span>
+          </div>
         </div>
 
         <DialogFooter className="mt-2 border-t border-border/60 pt-3">

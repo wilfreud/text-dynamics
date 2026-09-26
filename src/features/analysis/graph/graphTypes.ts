@@ -2,6 +2,8 @@ import type { MovementKind, PhaseKind, SegmentMetrics } from "../types";
 
 export type MetricKind = "intensity" | "tension" | "valence" | "temperature";
 
+export type CurveInterpolation = "smooth" | "linear";
+
 export interface MetricDescriptor {
   kind: MetricKind;
   label: string;

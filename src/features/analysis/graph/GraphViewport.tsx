@@ -9,6 +9,7 @@ import type {
 import {
   METRIC_DESCRIPTORS,
   type MetricKind,
+  type CurveInterpolation,
   type GraphViewportConfig as ViewportConfig,
 } from "./graphTypes";
 import { DEFAULT_VIEWPORT_PADDING } from "./graphGeometry";
@@ -19,7 +20,7 @@ import { SegmentInspector } from "./SegmentInspector";
 import { MovementInspector } from "./MovementInspector";
 import { GroupManager } from "./GroupManager";
 import { MetricHelpDialog } from "./MetricHelpDialog";
-import { Activity, Loader2, Info } from "lucide-react";
+import { Activity, Loader2, Info, Spline } from "lucide-react";
 
 interface GraphViewportProps {
   analysis: CanonicalAnalysis | null;
@@ -73,6 +74,15 @@ export function GraphViewport({
   const [inspectedMovementId, setInspectedMovementId] = useState<string | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
   const [isMetricHelpOpen, setIsMetricHelpOpen] = useState(false);
+  const [curveInterpolation, setCurveInterpolation] = useState<CurveInterpolation>(() => {
+    try {
+      const saved = localStorage.getItem("text_dynamics_curve_mode");
+      if (saved === "linear" || saved === "smooth") return saved;
+    } catch {
+      // Ignore localStorage access failures in restricted environments
+    }
+    return "smooth";
+  });
 
   // ResizeObserver to react to container size changes (editor collapse/expand or window resize)
   useEffect(() => {
@@ -134,9 +144,10 @@ export function GraphViewport({
       overrides,
       sourceUnits,
       selectedMetric,
-      viewportConfig
+      viewportConfig,
+      curveInterpolation
     );
-  }, [analysis, overrides, sourceUnits, selectedMetric, viewportConfig]);
+  }, [analysis, overrides, sourceUnits, selectedMetric, viewportConfig, curveInterpolation]);
 
   // Handle single segment inspector selection
   const singleSelectedSegment = useMemo(() => {
@@ -204,13 +215,41 @@ export function GraphViewport({
           )}
         </div>
 
-        {/* Metric Info Button & Semantic Summary */}
+        {/* Metric Controls, Info & Semantic Summary */}
         <div className="flex items-center gap-2">
           {analysis?.overall.dominantShape && (
             <span className="rounded bg-muted px-2 py-0.5 font-mono text-[11px] text-foreground">
               {analysis.overall.dominantShape}
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              setCurveInterpolation((prev) => {
+                const next: CurveInterpolation = prev === "smooth" ? "linear" : "smooth";
+                try {
+                  localStorage.setItem("text_dynamics_curve_mode", next);
+                } catch {
+                  // Ignore localStorage error
+                }
+                return next;
+              });
+            }}
+            title={
+              curveInterpolation === "smooth"
+                ? "Mode : Courbe fluide (cliquer pour passer en tracé linéaire)"
+                : "Mode : Tracé linéaire (cliquer pour passer en courbe fluide)"
+            }
+            aria-label={`Toggle curve interpolation mode, currently ${curveInterpolation}`}
+            className={`flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[11px] transition-colors cursor-pointer ${
+              curveInterpolation === "smooth"
+                ? "border-border bg-muted/80 text-foreground font-semibold"
+                : "border-transparent text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground"
+            }`}
+          >
+            <Spline className="size-3" />
+            <span>{curveInterpolation === "smooth" ? "Smooth" : "Linear"}</span>
+          </button>
           <button
             type="button"
             onClick={() => setIsMetricHelpOpen(true)}
