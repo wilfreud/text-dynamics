@@ -7,4 +7,7 @@ export * from "./graph/graphGeometry";
 export * from "./graph/graphPath";
 export * from "./graph/graphViewModel";
 export * from "./graph/GraphViewport";
+export * from "./graph/SegmentInspector";
+export * from "./graph/MovementInspector";
+export * from "./graph/GroupManager";
 export * from "./components/GraphWorkspace";

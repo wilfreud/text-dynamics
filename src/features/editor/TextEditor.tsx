@@ -2,12 +2,20 @@ import { useRef, useEffect } from "react";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "../../components/ui/button";
 
+export interface EditorSelectionRange {
+  startLine: number;
+  endLine: number;
+  startOffset?: number;
+  endOffset?: number;
+}
+
 interface TextEditorProps {
   content: string;
   onChange: (value: string) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
-  selectedRange?: { startLine: number; endLine: number } | null;
+  selectedRange?: EditorSelectionRange | null;
+  onCursorChange?: (cursorOffset: number) => void;
 }
 
 export function TextEditor({
@@ -16,6 +24,7 @@ export function TextEditor({
   collapsed,
   onToggleCollapse,
   selectedRange,
+  onCursorChange,
 }: TextEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
@@ -30,41 +39,51 @@ export function TextEditor({
     }
   }
 
-  // Handle selectedRange synchronization (e.g., when a segment is selected)
+  // Handle selectedRange synchronization (Graph -> Editor)
   useEffect(() => {
     if (!selectedRange || !textareaRef.current) return;
-    const { startLine, endLine } = selectedRange;
-
-    // Calculate character offsets for startLine and endLine (1-indexed)
-    let charStart = 0;
-    let charEnd = 0;
-    let currentLine = 1;
-
-    for (let i = 0; i < lines.length; i++) {
-      const lineLen = lines[i].length + 1; // +1 for \n
-      if (currentLine < startLine) {
-        charStart += lineLen;
-      }
-      if (currentLine <= endLine) {
-        charEnd += lineLen;
-      }
-      currentLine++;
-    }
+    const { startLine, startOffset, endOffset } = selectedRange;
 
     try {
       textareaRef.current.focus();
-      textareaRef.current.setSelectionRange(charStart, Math.max(charStart, charEnd - 1));
-      
-      // Scroll line into view
-      const lineHeightPx = 20; // approximate line height
-      const targetScrollTop = (startLine - 2) * lineHeightPx;
-      if (textareaRef.current) {
-        textareaRef.current.scrollTop = Math.max(0, targetScrollTop);
+
+      if (startOffset !== undefined && endOffset !== undefined) {
+        // Exact UTF-16 code unit range from local deterministic unitization
+        textareaRef.current.setSelectionRange(startOffset, endOffset);
+      } else {
+        // Fallback line offset calculation
+        let charStart = 0;
+        let charEnd = 0;
+        let currentLine = 1;
+
+        for (let i = 0; i < lines.length; i++) {
+          const lineLen = lines[i].length + 1;
+          if (currentLine < startLine) {
+            charStart += lineLen;
+          }
+          if (currentLine <= selectedRange.endLine) {
+            charEnd += lineLen;
+          }
+          currentLine++;
+        }
+        textareaRef.current.setSelectionRange(charStart, Math.max(charStart, charEnd - 1));
       }
+
+      // Scroll target line into view smoothly
+      const lineHeightPx = 20;
+      const targetScrollTop = (startLine - 2) * lineHeightPx;
+      textareaRef.current.scrollTop = Math.max(0, targetScrollTop);
     } catch {
-      // Ignore selection errors
+      // Ignore selection errors on unmounted/hidden elements
     }
   }, [selectedRange, content]);
+
+  // Track cursor position (Editor -> Graph)
+  function handleCursorEvent() {
+    if (!textareaRef.current || !onCursorChange) return;
+    const offset = textareaRef.current.selectionStart;
+    onCursorChange(offset);
+  }
 
   if (collapsed) {
     return (
@@ -128,7 +147,7 @@ export function TextEditor({
             return (
               <div
                 key={lineNum}
-                className={isHighlighted ? "text-foreground font-semibold" : ""}
+                className={isHighlighted ? "text-foreground font-semibold bg-muted/60" : ""}
               >
                 {lineNum}
               </div>
@@ -142,6 +161,9 @@ export function TextEditor({
           value={content}
           onChange={(e) => onChange(e.target.value)}
           onScroll={handleScroll}
+          onClick={handleCursorEvent}
+          onKeyUp={handleCursorEvent}
+          onSelect={handleCursorEvent}
           spellCheck={false}
           autoComplete="off"
           autoCorrect="off"

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Header } from "./components/Header";
 import { StatusBar } from "./components/StatusBar";
-import { TextEditor } from "./features/editor/TextEditor";
+import { TextEditor, type EditorSelectionRange } from "./features/editor/TextEditor";
 import { GraphViewport } from "./features/analysis/graph/GraphViewport";
 import { SettingsDialog } from "./features/settings/SettingsDialog";
 import { DocumentSwitcher } from "./features/documents/DocumentSwitcher";
@@ -17,8 +17,15 @@ import type { AppSettings } from "./features/settings/types";
 import {
   requestDocumentAnalysis,
   fetchLatestAnalysis,
+  saveUserOverrides,
 } from "./features/analysis/analysisService";
-import type { CanonicalAnalysis, UserOverrides } from "./features/analysis/types";
+import type {
+  CanonicalAnalysis,
+  MovementKind,
+  SegmentOverride,
+  UserOverrides,
+} from "./features/analysis/types";
+import type { MetricKind } from "./features/analysis/graph/graphTypes";
 import { unitizeText } from "./features/analysis/unitization";
 import { parseAppError, type ParsedAppError } from "./lib/errors";
 import { getLogger } from "./lib/logging";
@@ -48,17 +55,19 @@ export default function App() {
   const [editorCollapsed, setEditorCollapsed] = useState(false);
 
   // Analysis state
+  const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(null);
   const [currentAnalysis, setCurrentAnalysis] = useState<CanonicalAnalysis | null>(null);
-  const [currentOverrides, setCurrentOverrides] = useState<UserOverrides | undefined>(undefined);
+  const [currentOverrides, setCurrentOverrides] = useState<UserOverrides>({
+    segmentOverrides: {},
+    movementOverrides: {},
+    groups: [],
+  });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeError, setActiveError] = useState<ParsedAppError | null>(null);
 
-  // Segment selection state
-  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
-  const [selectedLineRange, setSelectedLineRange] = useState<{
-    startLine: number;
-    endLine: number;
-  } | null>(null);
+  // Segment selection state (supports multi-selection)
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
+  const [selectedLineRange, setSelectedLineRange] = useState<EditorSelectionRange | null>(null);
 
   // Debounced auto-save timer ref
   const saveTimeoutRef = useRef<number | null>(null);
@@ -66,6 +75,20 @@ export default function App() {
   latestContentRef.current = editorContent;
   const currentDocRef = useRef(currentDoc);
   currentDocRef.current = currentDoc;
+
+  // Overrides persistence ref & function
+  const currentOverridesRef = useRef(currentOverrides);
+  currentOverridesRef.current = currentOverrides;
+
+  const persistOverrides = useCallback(async (overridesToPersist: UserOverrides) => {
+    if (!currentAnalysisId) return;
+    try {
+      await saveUserOverrides(currentAnalysisId, overridesToPersist);
+      logger.debug("Persisted user overrides for analysis id={id}", { id: currentAnalysisId });
+    } catch (err) {
+      logger.error("Failed to save user overrides: {err}", { err: String(err) });
+    }
+  }, [currentAnalysisId]);
 
   // Initial load
   useEffect(() => {
@@ -104,18 +127,30 @@ export default function App() {
       setCurrentDoc(doc);
       setEditorContent(doc.content);
       setIsDirty(false);
-      setSelectedSegmentId(null);
+      setSelectedSegmentIds([]);
       setSelectedLineRange(null);
       setActiveError(null);
 
       // Load latest persisted analysis for this document
       const analysisResult = await fetchLatestAnalysis(docId);
       if (analysisResult) {
+        setCurrentAnalysisId(analysisResult.record.id);
         setCurrentAnalysis(analysisResult.analysis);
-        setCurrentOverrides(analysisResult.overrides);
+        setCurrentOverrides(
+          analysisResult.overrides ?? {
+            segmentOverrides: {},
+            movementOverrides: {},
+            groups: [],
+          }
+        );
       } else {
+        setCurrentAnalysisId(null);
         setCurrentAnalysis(null);
-        setCurrentOverrides(undefined);
+        setCurrentOverrides({
+          segmentOverrides: {},
+          movementOverrides: {},
+          groups: [],
+        });
       }
     } catch (err) {
       const parsed = parseAppError(err);
@@ -209,8 +244,16 @@ export default function App() {
       );
 
       // Successfully received valid canonical analysis
+      // Invariant: New analysis starts with a fresh override layer (new segment IDs)
+      setCurrentAnalysisId(result.record.id);
       setCurrentAnalysis(result.analysis);
-      setCurrentOverrides(result.overrides);
+      setCurrentOverrides({
+        segmentOverrides: {},
+        movementOverrides: {},
+        groups: [],
+      });
+      setSelectedSegmentIds([]);
+      setSelectedLineRange(null);
       logger.info("Analysis completed successfully id={id}", { id: result.record.id });
     } catch (err) {
       const parsed = parseAppError(err);
@@ -219,36 +262,195 @@ export default function App() {
         err: parsed.message,
       });
       setActiveError(parsed);
-      // NOTE: We intentionally do NOT clear `currentAnalysis` so previous valid analysis is preserved!
+      // Invariant: We intentionally do NOT clear `currentAnalysis` so previous valid analysis is preserved!
     } finally {
       setIsAnalyzing(false);
     }
   }
 
-  // Compute unitization from current editor content
+  // Compute deterministic unitization from current editor content
   const unitization = useMemo(() => {
     return unitizeText(editorContent);
   }, [editorContent]);
 
-  // Handle segment selection from graph
-  function handleSelectSegment(segmentId: string) {
-    setSelectedSegmentId(segmentId);
+  // Synchronize Graph -> Editor selection
+  function handleSelectSegment(segmentId: string, isMulti: boolean) {
+    let nextSelected: string[];
+    if (isMulti) {
+      if (selectedSegmentIds.includes(segmentId)) {
+        nextSelected = selectedSegmentIds.filter((id) => id !== segmentId);
+      } else {
+        nextSelected = [...selectedSegmentIds, segmentId];
+      }
+    } else {
+      nextSelected = [segmentId];
+    }
+    setSelectedSegmentIds(nextSelected);
 
     if (!currentAnalysis) return;
-    const segment = currentAnalysis.segments.find((s) => s.id === segmentId);
-    if (!segment) return;
 
-    const startUnit = unitization.units.find((u) => u.id === segment.startUnitId);
-    const endUnit = unitization.units.find((u) => u.id === segment.endUnitId);
+    // Focus editor on primary/latest selected segment
+    const targetSegment = currentAnalysis.segments.find((s) => s.id === segmentId);
+    if (!targetSegment) return;
+
+    const startUnit = unitization.units.find((u) => u.id === targetSegment.startUnitId);
+    const endUnit = unitization.units.find((u) => u.id === targetSegment.endUnitId);
 
     if (startUnit && endUnit) {
       setSelectedLineRange({
         startLine: startUnit.lineIndex + 1,
         endLine: endUnit.lineIndex + 1,
+        startOffset: startUnit.startIndex,
+        endOffset: endUnit.endIndex,
       });
     } else {
       setSelectedLineRange(null);
     }
+  }
+
+  // Synchronize Editor -> Graph selection (caret tracking)
+  const cursorDebounceRef = useRef<number | null>(null);
+  function handleEditorCursorChange(cursorOffset: number) {
+    if (!currentAnalysis || isAnalyzing) return;
+
+    if (cursorDebounceRef.current !== null) {
+      window.clearTimeout(cursorDebounceRef.current);
+    }
+
+    cursorDebounceRef.current = window.setTimeout(() => {
+      // Find unit covering cursorOffset
+      const unit = unitization.units.find(
+        (u) => cursorOffset >= u.startIndex && cursorOffset <= u.endIndex
+      );
+      if (!unit) return;
+
+      // Find segment spanning this unit
+      const segment = currentAnalysis.segments.find((seg) => {
+        const segUnits = unitization.units;
+        const sIdx = segUnits.findIndex((u) => u.id === seg.startUnitId);
+        const eIdx = segUnits.findIndex((u) => u.id === seg.endUnitId);
+        const targetIdx = unit.index;
+        return targetIdx >= sIdx && targetIdx <= eIdx;
+      });
+
+      if (segment && !selectedSegmentIds.includes(segment.id)) {
+        setSelectedSegmentIds([segment.id]);
+      }
+    }, 120);
+  }
+
+  // Override Management Callbacks
+  function handleUpdateSegmentOverride(segmentId: string, override: SegmentOverride) {
+    setCurrentOverrides((prev) => {
+      const next = {
+        ...prev,
+        segmentOverrides: {
+          ...prev.segmentOverrides,
+          [segmentId]: override,
+        },
+      };
+      void persistOverrides(next);
+      return next;
+    });
+  }
+
+  function handleResetSegmentOverride(segmentId: string) {
+    setCurrentOverrides((prev) => {
+      const nextOverrides = { ...prev.segmentOverrides };
+      delete nextOverrides[segmentId];
+      const next = {
+        ...prev,
+        segmentOverrides: nextOverrides,
+      };
+      void persistOverrides(next);
+      return next;
+    });
+  }
+
+  function handleUpdateMovementOverride(movementId: string, newKind: MovementKind) {
+    setCurrentOverrides((prev) => {
+      const next = {
+        ...prev,
+        movementOverrides: {
+          ...prev.movementOverrides,
+          [movementId]: { kind: newKind },
+        },
+      };
+      void persistOverrides(next);
+      return next;
+    });
+  }
+
+  function handleResetMovementOverride(movementId: string) {
+    setCurrentOverrides((prev) => {
+      const nextOverrides = { ...prev.movementOverrides };
+      delete nextOverrides[movementId];
+      const next = {
+        ...prev,
+        movementOverrides: nextOverrides,
+      };
+      void persistOverrides(next);
+      return next;
+    });
+  }
+
+  function handleAddGroup(label: string, segmentIds: string[]) {
+    setCurrentOverrides((prev) => {
+      const newGroup = {
+        id: `group_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        label,
+        segmentIds,
+      };
+      const next = {
+        ...prev,
+        groups: [...prev.groups, newGroup],
+      };
+      void persistOverrides(next);
+      return next;
+    });
+  }
+
+  function handleRemoveGroup(groupId: string) {
+    setCurrentOverrides((prev) => {
+      const next = {
+        ...prev,
+        groups: prev.groups.filter((g) => g.id !== groupId),
+      };
+      void persistOverrides(next);
+      return next;
+    });
+  }
+
+  function handleSelectGroup(segmentIds: string[]) {
+    setSelectedSegmentIds(segmentIds);
+    if (segmentIds.length > 0) {
+      handleSelectSegment(segmentIds[0], false);
+    }
+  }
+
+  // Real-time drag override for nodes
+  function handleDragOverride(
+    segmentId: string,
+    metric: MetricKind,
+    newValue: number
+  ) {
+    setCurrentOverrides((prev) => {
+      const existing = prev.segmentOverrides[segmentId] ?? {};
+      return {
+        ...prev,
+        segmentOverrides: {
+          ...prev.segmentOverrides,
+          [segmentId]: {
+            ...existing,
+            [metric]: newValue,
+          },
+        },
+      };
+    });
+  }
+
+  function handleDragEnd() {
+    void persistOverrides(currentOverridesRef.current);
   }
 
   const lines = editorContent.split("\n");
@@ -277,16 +479,27 @@ export default function App() {
           collapsed={editorCollapsed}
           onToggleCollapse={() => setEditorCollapsed((prev) => !prev)}
           selectedRange={selectedLineRange}
+          onCursorChange={handleEditorCursorChange}
         />
 
-        {/* Right: Custom SVG Graph Viewport */}
+        {/* Right: Custom SVG Graph Viewport with Interactions */}
         <GraphViewport
           analysis={currentAnalysis}
           overrides={currentOverrides}
           sourceUnits={unitization.units}
           isAnalyzing={isAnalyzing}
-          selectedSegmentId={selectedSegmentId}
+          selectedSegmentIds={selectedSegmentIds}
           onSelectSegment={handleSelectSegment}
+          onUpdateSegmentOverride={handleUpdateSegmentOverride}
+          onResetSegmentOverride={handleResetSegmentOverride}
+          onUpdateMovementOverride={handleUpdateMovementOverride}
+          onResetMovementOverride={handleResetMovementOverride}
+          onAddGroup={handleAddGroup}
+          onRemoveGroup={handleRemoveGroup}
+          onSelectGroup={handleSelectGroup}
+          onClearSelection={() => setSelectedSegmentIds([])}
+          onDragOverride={handleDragOverride}
+          onDragEnd={handleDragEnd}
           modelId={settings.modelId}
         />
       </div>

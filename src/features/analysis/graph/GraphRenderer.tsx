@@ -1,13 +1,20 @@
+import { useRef, useState } from "react";
 import type {
   GraphMovementMarker,
   GraphPoint,
   GraphViewModel,
 } from "./graphTypes";
+import type { SegmentGroup } from "../types";
+import { unprojectY } from "./graphGeometry";
 
 interface GraphRendererProps {
   viewModel: GraphViewModel;
-  selectedSegmentId: string | null;
-  onSelectSegment: (segmentId: string) => void;
+  selectedSegmentIds: string[];
+  groups?: SegmentGroup[];
+  onSelectSegment: (segmentId: string, isMulti: boolean) => void;
+  onSelectMovement?: (movementId: string) => void;
+  onDragOverride?: (segmentId: string, newValue: number) => void;
+  onDragEnd?: () => void;
   onHoverTarget: (
     target:
       | { type: "point"; point: GraphPoint }
@@ -18,23 +25,99 @@ interface GraphRendererProps {
 
 export function GraphRenderer({
   viewModel,
-  selectedSegmentId,
+  selectedSegmentIds,
+  groups = [],
   onSelectSegment,
+  onSelectMovement,
+  onDragOverride,
+  onDragEnd,
   onHoverTarget,
 }: GraphRendererProps) {
   const { viewport, points, paths, phaseBands, movementMarkers, grid } =
     viewModel;
+
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [dragState, setDragState] = useState<{
+    segmentId: string;
+    startY: number;
+    hasMoved: boolean;
+  } | null>(null);
 
   const plotHeight = Math.max(
     10,
     viewport.height - viewport.padding.top - viewport.padding.bottom
   );
 
+  // Pointer drag event handlers for vertical node override editing
+  function handleNodePointerDown(
+    e: React.PointerEvent<SVGGElement>,
+    point: GraphPoint
+  ) {
+    if (e.button !== 0) return; // Only primary button
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    setDragState({
+      segmentId: point.segmentId,
+      startY: e.clientY,
+      hasMoved: false,
+    });
+    onHoverTarget(null);
+  }
+
+  function handleNodePointerMove(e: React.PointerEvent<SVGGElement>) {
+    if (!dragState || !svgRef.current) return;
+    const dy = Math.abs(e.clientY - dragState.startY);
+    if (dy > 3 && !dragState.hasMoved) {
+      setDragState((prev) => (prev ? { ...prev, hasMoved: true } : null));
+    }
+
+    if (dragState.hasMoved || dy > 3) {
+      const rect = svgRef.current.getBoundingClientRect();
+      const relativePixelY =
+        (e.clientY - rect.top) * (viewport.height / rect.height);
+
+      const newValue = unprojectY(
+        relativePixelY,
+        viewModel.metric,
+        viewport
+      );
+      onDragOverride?.(dragState.segmentId, newValue);
+    }
+  }
+
+  function handleNodePointerUp(
+    e: React.PointerEvent<SVGGElement>,
+    point: GraphPoint
+  ) {
+    if (!dragState) return;
+    e.stopPropagation();
+
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // Ignore if pointer capture already lost
+    }
+
+    if (dragState.hasMoved) {
+      onDragEnd?.();
+    } else {
+      // Single click -> select segment (respecting Shift/Cmd/Ctrl multi-select)
+      const isMulti = e.shiftKey || e.metaKey || e.ctrlKey;
+      onSelectSegment(point.segmentId, isMulti);
+    }
+
+    setDragState(null);
+  }
+
   return (
     <svg
+      ref={svgRef}
       width={viewport.width}
       height={viewport.height}
-      className="overflow-visible select-none text-foreground"
+      className={`overflow-visible select-none text-foreground ${
+        dragState?.hasMoved ? "cursor-ns-resize" : ""
+      }`}
       aria-label="Dynamic structural graph"
       role="graphics-document"
     >
@@ -63,7 +146,7 @@ export function GraphRenderer({
             {/* Phase Label at Bottom */}
             <text
               x={band.x + band.width / 2}
-              y={viewport.height - 12}
+              y={viewport.height - 18}
               textAnchor="middle"
               className="fill-muted-foreground font-mono text-[9px] uppercase tracking-wider"
             >
@@ -116,13 +199,20 @@ export function GraphRenderer({
               role="button"
               aria-label={`Movement ${mov.kind}`}
               className="cursor-pointer outline-none group"
-              onMouseEnter={() =>
-                onHoverTarget({ type: "movement", marker: mov })
-              }
+              onClick={() => onSelectMovement?.(mov.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelectMovement?.(mov.id);
+                }
+              }}
+              onMouseEnter={() => {
+                if (!dragState) onHoverTarget({ type: "movement", marker: mov });
+              }}
               onMouseLeave={() => onHoverTarget(null)}
-              onFocus={() =>
-                onHoverTarget({ type: "movement", marker: mov })
-              }
+              onFocus={() => {
+                if (!dragState) onHoverTarget({ type: "movement", marker: mov });
+              }}
               onBlur={() => onHoverTarget(null)}
             >
               {/* Invisible Hit Area */}
@@ -194,10 +284,39 @@ export function GraphRenderer({
         ))}
       </g>
 
-      {/* 5. Ordered Segment Nodes */}
+      {/* 5. User Groups Subtle Visual Indicators (Bottom Strip) */}
+      <g className="groups-indicators" opacity="0.7">
+        {groups.map((group, gIdx) => {
+          const groupPoints = points.filter((p) =>
+            group.segmentIds.includes(p.segmentId)
+          );
+          if (groupPoints.length === 0) return null;
+
+          const minX = Math.min(...groupPoints.map((p) => p.x));
+          const maxX = Math.max(...groupPoints.map((p) => p.x));
+          const lineY = viewport.height - 4 - gIdx * 4;
+
+          return (
+            <g key={group.id}>
+              <line
+                x1={minX - 4}
+                y1={lineY}
+                x2={maxX + 4}
+                y2={lineY}
+                stroke="currentColor"
+                strokeWidth="2"
+                className="text-muted-foreground"
+              />
+            </g>
+          );
+        })}
+      </g>
+
+      {/* 6. Ordered Segment Nodes */}
       <g className="nodes">
         {points.map((point) => {
-          const isSelected = point.segmentId === selectedSegmentId;
+          const isSelected = selectedSegmentIds.includes(point.segmentId);
+          const isDraggingThis = dragState?.segmentId === point.segmentId;
 
           return (
             <g
@@ -205,32 +324,41 @@ export function GraphRenderer({
               tabIndex={0}
               role="button"
               aria-label={`${point.segmentId}: ${point.lineRangeLabel}`}
-              className="cursor-pointer outline-none group"
-              onClick={() => onSelectSegment(point.segmentId)}
+              className={`outline-none group ${
+                isDraggingThis ? "cursor-ns-resize" : "cursor-pointer"
+              }`}
+              onPointerDown={(e) => handleNodePointerDown(e, point)}
+              onPointerMove={handleNodePointerMove}
+              onPointerUp={(e) => handleNodePointerUp(e, point)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  onSelectSegment(point.segmentId);
+                  onSelectSegment(
+                    point.segmentId,
+                    e.shiftKey || e.metaKey || e.ctrlKey
+                  );
                 }
               }}
-              onMouseEnter={() =>
-                onHoverTarget({ type: "point", point })
-              }
-              onMouseLeave={() => onHoverTarget(null)}
-              onFocus={() =>
-                onHoverTarget({ type: "point", point })
-              }
+              onMouseEnter={() => {
+                if (!dragState) onHoverTarget({ type: "point", point });
+              }}
+              onMouseLeave={() => {
+                if (!dragState) onHoverTarget(null);
+              }}
+              onFocus={() => {
+                if (!dragState) onHoverTarget({ type: "point", point });
+              }}
               onBlur={() => onHoverTarget(null)}
             >
               {/* Larger Transparent Hit Target */}
-              <circle cx={point.x} cy={point.y} r="14" fill="transparent" />
+              <circle cx={point.x} cy={point.y} r="16" fill="transparent" />
 
-              {/* Selection Halo */}
+              {/* Multi-Selection or Single-Selection Halo */}
               {isSelected && (
                 <circle
                   cx={point.x}
                   cy={point.y}
-                  r="9"
+                  r="10"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.5"

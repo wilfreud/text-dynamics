@@ -1,6 +1,11 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import type { SourceUnit } from "../unitization/unitizer";
-import type { CanonicalAnalysis, UserOverrides } from "../types";
+import type {
+  CanonicalAnalysis,
+  MovementKind,
+  SegmentOverride,
+  UserOverrides,
+} from "../types";
 import {
   METRIC_DESCRIPTORS,
   type MetricKind,
@@ -10,6 +15,9 @@ import { DEFAULT_VIEWPORT_PADDING } from "./graphGeometry";
 import { buildGraphViewModel } from "./graphViewModel";
 import { GraphRenderer } from "./GraphRenderer";
 import { GraphTooltip, type TooltipTarget } from "./GraphTooltip";
+import { SegmentInspector } from "./SegmentInspector";
+import { MovementInspector } from "./MovementInspector";
+import { GroupManager } from "./GroupManager";
 import { Activity, Loader2, Info } from "lucide-react";
 
 interface GraphViewportProps {
@@ -17,8 +25,18 @@ interface GraphViewportProps {
   overrides?: UserOverrides;
   sourceUnits: SourceUnit[];
   isAnalyzing: boolean;
-  selectedSegmentId: string | null;
-  onSelectSegment: (segmentId: string) => void;
+  selectedSegmentIds: string[];
+  onSelectSegment: (segmentId: string, isMulti: boolean) => void;
+  onUpdateSegmentOverride: (segmentId: string, override: SegmentOverride) => void;
+  onResetSegmentOverride: (segmentId: string) => void;
+  onUpdateMovementOverride: (movementId: string, newKind: MovementKind) => void;
+  onResetMovementOverride: (movementId: string) => void;
+  onAddGroup: (label: string, segmentIds: string[]) => void;
+  onRemoveGroup: (groupId: string) => void;
+  onSelectGroup: (segmentIds: string[]) => void;
+  onClearSelection: () => void;
+  onDragOverride: (segmentId: string, metric: MetricKind, newValue: number) => void;
+  onDragEnd: () => void;
   modelId?: string;
 }
 
@@ -27,8 +45,18 @@ export function GraphViewport({
   overrides,
   sourceUnits,
   isAnalyzing,
-  selectedSegmentId,
+  selectedSegmentIds,
   onSelectSegment,
+  onUpdateSegmentOverride,
+  onResetSegmentOverride,
+  onUpdateMovementOverride,
+  onResetMovementOverride,
+  onAddGroup,
+  onRemoveGroup,
+  onSelectGroup,
+  onClearSelection,
+  onDragOverride,
+  onDragEnd,
   modelId = "gemini-3.8-flash",
 }: GraphViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -39,6 +67,8 @@ export function GraphViewport({
 
   const [selectedMetric, setSelectedMetric] = useState<MetricKind>("intensity");
   const [hoverTarget, setHoverTarget] = useState<TooltipTarget | null>(null);
+  const [inspectedMovementId, setInspectedMovementId] = useState<string | null>(null);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(true);
 
   // ResizeObserver to react to container size changes (editor collapse/expand or window resize)
   useEffect(() => {
@@ -81,6 +111,43 @@ export function GraphViewport({
       viewportConfig
     );
   }, [analysis, overrides, sourceUnits, selectedMetric, viewportConfig]);
+
+  // Handle single segment inspector selection
+  const singleSelectedSegment = useMemo(() => {
+    if (selectedSegmentIds.length !== 1 || !analysis) return null;
+    return analysis.segments.find((s) => s.id === selectedSegmentIds[0]) ?? null;
+  }, [selectedSegmentIds, analysis]);
+
+  const singleSelectedPoint = useMemo(() => {
+    if (!singleSelectedSegment || !viewModel) return null;
+    return (
+      viewModel.points.find((p) => p.segmentId === singleSelectedSegment.id) ??
+      null
+    );
+  }, [singleSelectedSegment, viewModel]);
+
+  const inspectedMovement = useMemo(() => {
+    if (!inspectedMovementId || !analysis) return null;
+    return (
+      analysis.movements.find((m) => m.id === inspectedMovementId) ?? null
+    );
+  }, [inspectedMovementId, analysis]);
+
+  // When segment selection changes, ensure inspector is open
+  useEffect(() => {
+    if (selectedSegmentIds.length === 1) {
+      setIsInspectorOpen(true);
+      setInspectedMovementId(null);
+    }
+  }, [selectedSegmentIds]);
+
+  function handleSelectMovement(movementId: string) {
+    setInspectedMovementId(movementId);
+  }
+
+  function handleNodeDrag(segmentId: string, newValue: number) {
+    onDragOverride(segmentId, selectedMetric, newValue);
+  }
 
   if (!analysis && !isAnalyzing) {
     return (
@@ -165,16 +232,17 @@ export function GraphViewport({
       )}
 
       {/* Main SVG Graph Container */}
-      <div
-        ref={containerRef}
-        className="relative flex-1 overflow-hidden"
-      >
+      <div ref={containerRef} className="relative flex-1 overflow-hidden">
         {viewModel && (
           <>
             <GraphRenderer
               viewModel={viewModel}
-              selectedSegmentId={selectedSegmentId}
+              selectedSegmentIds={selectedSegmentIds}
+              groups={overrides?.groups}
               onSelectSegment={onSelectSegment}
+              onSelectMovement={handleSelectMovement}
+              onDragOverride={handleNodeDrag}
+              onDragEnd={onDragEnd}
               onHoverTarget={setHoverTarget}
             />
             <GraphTooltip
@@ -185,6 +253,42 @@ export function GraphViewport({
             />
           </>
         )}
+
+        {/* Segment Inspector Popover */}
+        {singleSelectedSegment && isInspectorOpen && (
+          <SegmentInspector
+            segment={singleSelectedSegment}
+            excerpt={singleSelectedPoint?.excerpt ?? ""}
+            lineRangeLabel={singleSelectedPoint?.lineRangeLabel ?? ""}
+            overrides={overrides}
+            onUpdateOverride={onUpdateSegmentOverride}
+            onResetSegmentOverride={onResetSegmentOverride}
+            onAddGroup={onAddGroup}
+            onRemoveGroup={onRemoveGroup}
+            onClose={() => setIsInspectorOpen(false)}
+          />
+        )}
+
+        {/* Movement Inspector Popover */}
+        {inspectedMovement && (
+          <MovementInspector
+            movement={inspectedMovement}
+            overrides={overrides}
+            onUpdateMovementOverride={onUpdateMovementOverride}
+            onResetMovementOverride={onResetMovementOverride}
+            onClose={() => setInspectedMovementId(null)}
+          />
+        )}
+
+        {/* Group Manager for Multi-selection and Groups */}
+        <GroupManager
+          selectedSegmentIds={selectedSegmentIds}
+          groups={overrides?.groups ?? []}
+          onCreateGroup={onAddGroup}
+          onDeleteGroup={onRemoveGroup}
+          onSelectGroup={onSelectGroup}
+          onClearSelection={onClearSelection}
+        />
       </div>
     </main>
   );
