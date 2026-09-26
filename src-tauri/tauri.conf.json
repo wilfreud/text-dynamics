@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "text-dynamics",
+  "productName": "Text Dynamics",
   "version": "0.1.0",
-  "identifier": "dev.commodore64.text-dynamics",
+  "identifier": "dev.commodore.textdynamics",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "text-dynamics",
-        "width": 800,
-        "height": 600
+        "title": "Text Dynamics",
+        "width": 1200,
+        "height": 800
       }
     ],
     "security": {
