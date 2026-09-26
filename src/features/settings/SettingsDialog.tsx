@@ -107,7 +107,14 @@ export function SettingsDialog({
 
   async function handleSaveGeneral() {
     setIsSavingGeneral(true);
+    setKeyErrorMessage(null);
     try {
+      if (newApiKey.trim()) {
+        await updateApiKey(newApiKey.trim());
+        setNewApiKey("");
+        setSettings((prev) => ({ ...prev, hasApiKey: true }));
+      }
+
       await saveAppSettings({
         modelId: modelInput.trim() || "gemini-3.8-flash",
         customInstruction: instructionInput.trim(),
@@ -119,8 +126,8 @@ export function SettingsDialog({
       }));
       onSettingsSaved?.();
       onOpenChange(false);
-    } catch {
-      // Logged in service
+    } catch (err) {
+      setKeyErrorMessage("Failed to save settings or API key.");
     } finally {
       setIsSavingGeneral(false);
     }
