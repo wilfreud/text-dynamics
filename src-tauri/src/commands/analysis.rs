@@ -10,6 +10,7 @@ pub async fn analyze_document(
     document_id: String,
     custom_instruction: Option<String>,
     model_override: Option<String>,
+    units: Option<Vec<crate::analysis::model::SourceUnit>>,
 ) -> Result<AnalysisRecord, AppError> {
     state
         .analysis
@@ -17,6 +18,7 @@ pub async fn analyze_document(
             &document_id,
             custom_instruction.as_deref(),
             model_override.as_deref(),
+            units,
         )
         .await
 }

@@ -86,12 +86,26 @@ pub fn validate_canonical_analysis(
             )));
         }
 
-        // Forward non-overlapping sequence across segments
+        // Complete coverage: first segment must start at first source unit (idx 0)
+        if seg_idx == 0 && start_u_idx != 0 {
+            return Err(AppError::Analysis(format!(
+                "First segment '{}' must start at first unit '{}' (got idx {})",
+                seg.id, source_units[0].id, start_u_idx
+            )));
+        }
+
+        // Forward non-overlapping, contiguous sequence across segments
         if let Some(last_end) = last_unit_end_idx {
             if start_u_idx <= last_end {
                 return Err(AppError::Analysis(format!(
                     "Segment '{}' overlaps with previous segment (start idx {} <= previous end idx {})",
                     seg.id, start_u_idx, last_end
+                )));
+            }
+            if start_u_idx > last_end + 1 {
+                return Err(AppError::Analysis(format!(
+                    "Gap in unit coverage between segments: units between idx {} and {} are omitted",
+                    last_end, start_u_idx
                 )));
             }
         }
@@ -103,6 +117,30 @@ pub fn validate_canonical_analysis(
         validate_range("valence", seg.valence, -10.0, 10.0, &seg.id)?;
         validate_range("temperature", seg.temperature, -10.0, 10.0, &seg.id)?;
         validate_range("confidence", seg.confidence, 0.0, 1.0, &seg.id)?;
+    }
+
+    // Complete coverage: last segment must end at the last source unit
+    if let Some(last_end) = last_unit_end_idx {
+        if last_end != source_units.len() - 1 {
+            return Err(AppError::Analysis(format!(
+                "Incomplete unit coverage: last segment ends at unit idx {}, but total units is {}",
+                last_end,
+                source_units.len()
+            )));
+        }
+    }
+
+    // Granularity sanity checks (log warnings, not rejections)
+    if source_units.len() >= 8 && analysis.segments.len() == 1 {
+        log::warn!(
+            "Possible under-segmentation: {} atomic units grouped into only 1 semantic segment",
+            source_units.len()
+        );
+    } else if source_units.len() >= 10 && analysis.segments.len() == source_units.len() {
+        log::warn!(
+            "Possible over-segmentation: every atomic unit ({}) became a separate semantic segment",
+            source_units.len()
+        );
     }
 
     // 3. Validate movements
@@ -321,6 +359,27 @@ mod tests {
         let units = sample_units();
         let mut analysis = valid_analysis();
         analysis.segments[0].intensity = 11.0;
+        assert!(validate_canonical_analysis(&analysis, &units).is_err());
+    }
+
+    #[test]
+    fn test_gap_between_segments_rejected() {
+        let units = sample_units();
+        let mut analysis = valid_analysis();
+        // s001 ends at u0001, but s002 starts at u0003 (skipping u0002)
+        analysis.segments[0].end_unit_id = "u0001".into();
+        analysis.segments[1].start_unit_id = "u0003".into();
+        assert!(validate_canonical_analysis(&analysis, &units).is_err());
+    }
+
+    #[test]
+    fn test_incomplete_trailing_coverage_rejected() {
+        let units = sample_units();
+        let mut analysis = valid_analysis();
+        // s002 ends at u0002 instead of u0003 (leaving u0003 uncovered)
+        analysis.segments[1].start_unit_id = "u0002".into();
+        analysis.segments[1].end_unit_id = "u0002".into();
+        analysis.segments[0].end_unit_id = "u0001".into();
         assert!(validate_canonical_analysis(&analysis, &units).is_err());
     }
 }

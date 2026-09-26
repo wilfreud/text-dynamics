@@ -120,13 +120,18 @@ export interface AnalysisOverridesRecordDto {
 export async function ipcAnalyzeDocument(
   documentId: string,
   customInstruction?: string,
-  modelOverride?: string
+  modelOverride?: string,
+  units?: Array<{ id: string; text: string }>
 ): Promise<AnalysisRecordDto> {
-  logger.info("IPC: analyze_document doc_id={documentId}", { documentId });
+  logger.info("IPC: analyze_document doc_id={documentId} units={unitCount}", {
+    documentId,
+    unitCount: units?.length,
+  });
   return invoke<AnalysisRecordDto>("analyze_document", {
     documentId,
     customInstruction,
     modelOverride,
+    units,
   });
 }
 

@@ -262,10 +262,16 @@ export default function App() {
     setActiveError(null);
 
     try {
+      const unitsPayload = unitization.units.map((u) => ({
+        id: u.id,
+        text: u.text,
+      }));
+
       const result = await requestDocumentAnalysis(
         currentDoc.id,
         settings.customInstruction.trim() || undefined,
-        settings.modelId.trim() || undefined
+        settings.modelId.trim() || undefined,
+        unitsPayload
       );
 
       // Successfully received valid canonical analysis

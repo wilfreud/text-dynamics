@@ -34,6 +34,7 @@ impl AnalysisService {
         document_id: &str,
         custom_instruction: Option<&str>,
         model_override: Option<&str>,
+        passed_units: Option<Vec<crate::analysis::model::SourceUnit>>,
     ) -> Result<AnalysisRecord, AppError> {
         let trimmed_doc_id = document_id.trim();
         if trimmed_doc_id.is_empty() {
@@ -61,8 +62,13 @@ impl AnalysisService {
                 .unwrap_or_else(|_| DEFAULT_MODEL.to_string())
         };
 
-        // 4. Deterministically unitize source text
-        let units = unitize_text(&doc.content);
+        // 4. Deterministically unitize source text (use frontend-provided atomic units if available)
+        let units = if let Some(provided) = passed_units.filter(|u| !u.is_empty()) {
+            provided
+        } else {
+            unitize_text(&doc.content)
+        };
+
         if units.is_empty() {
             return Err(AppError::InvalidInput(
                 "No readable units extracted from text".into(),
@@ -143,18 +149,22 @@ mod tests {
     use crate::persistence::documents::create_document;
 
     #[test]
+    #[ignore = "requires interactive OS Keychain access"]
     fn test_analyze_document_fails_cleanly_without_api_key() {
         tauri::async_runtime::block_on(async {
             let db = Database::in_memory().expect("in-memory db must initialize");
             let secrets = KeyringStore::new();
-            // Ensure no key is stored for test
-            let _ = secrets.delete_api_key();
+
+            // If a developer key is present in OS keychain, don't delete real developer credentials in unit tests
+            if secrets.get_api_key().ok().flatten().is_some() {
+                return;
+            }
 
             let doc = create_document(&db, "Test Poem", "Line 1\nLine 2\n")
                 .expect("document creation should succeed");
 
             let service = AnalysisService::new(db, secrets);
-            let result = service.analyze_document(&doc.id, None, None).await;
+            let result = service.analyze_document(&doc.id, None, None, None).await;
 
             match result {
                 Err(AppError::MissingApiKey) => {
@@ -175,7 +185,7 @@ mod tests {
                 .expect("document creation should succeed");
 
             let service = AnalysisService::new(db, secrets);
-            let result = service.analyze_document(&doc.id, None, None).await;
+            let result = service.analyze_document(&doc.id, None, None, None).await;
 
             match result {
                 Err(AppError::InvalidInput(_)) => {

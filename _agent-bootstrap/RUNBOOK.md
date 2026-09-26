@@ -61,3 +61,7 @@ The task files are intentionally more precise than these launcher prompts. Paste
 ## 13 — Keychain + SQLite diagnosis & fix
 
 `Read _agent-bootstrap/prompts/13_diagnose_keychain_sqlite_persistence.md and execute it completely. Follow AGENTS.md and the existing project guardrails. Diagnose the current implementation before changing code, then fix credential persistence and verify the real SQLite runtime path. Do not perform unrelated refactoring.`
+
+## 14 — robust source segmentation & semantic grouping
+
+`Read _agent-bootstrap/prompts/14_robust_text_dynamics_semantic_segmentation.md and execute it completely. Follow AGENTS.md and the existing project guardrails. Audit the current analysis pipeline first, then replace the current line/paragraph-driven graph segmentation with the deterministic atomic-unit → Gemini semantic-segment pipeline described in the file. Do not perform unrelated redesign or refactoring.`

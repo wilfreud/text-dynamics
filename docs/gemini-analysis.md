@@ -18,7 +18,7 @@ This document details the Gemini analysis integration, prompt versioning, struct
 | :--- | :--- | :--- |
 | **Default Model** | `gemini-3.8-flash` | Configurable in UI Settings (`settings` table `model_id`) |
 | **API Endpoint** | `v1beta/models/{model}:generateContent` | Hardcoded REST endpoint |
-| **Prompt Version** | `text-dynamics-1` | `src-tauri/src/analysis/prompt.rs` |
+| **Prompt Version** | `text-dynamics-2` | `src-tauri/src/analysis/prompt.rs` |
 | **Schema Version** | `1.0` | `src-tauri/src/gemini/schema.rs` |
 | **Temperature** | `0.2` | Generation configuration (low variance for analytical rigor) |
 | **Response MIME** | `application/json` | Enforced structured JSON output |
@@ -37,24 +37,27 @@ This document details the Gemini analysis integration, prompt versioning, struct
 
 ---
 
-
 ## 3. The Analysis Request Pipeline
 
-1. **Deterministic Unitization**:
-   - The document's raw content is unitized into contiguous `SourceUnit`s (stanzas, lines, or sentences) identified as `u0001`, `u0002`, etc., with exact character bounds.
+1. **Deterministic Atomic Unitization**:
+   - The editor's canonical source text is parsed into structural paragraphs/stanzas, physical lines, and ordered non-overlapping `SourceUnit`s (`u0001`, `u0002`, ...).
+   - Sentence segmentation is performed inside each physical line using `Intl.Segmenter(locale, { granularity: 'sentence' })` with regex fallback. Short unpunctuated poetry lines are preserved as atomic poetic units.
+   - Long unpunctuated lines exceeding 500 characters trigger a conservative clause/punctuation fallback split.
+   - **Exact UTF-16 Offsets**: Character bounds (`startIndex`, `endIndex`) are calculated locally in exact UTF-16 code units matching JavaScript textarea selection ranges. **Gemini never calculates or guesses character offsets.**
 2. **Correlation ID Generation**:
    - A unique request ID (`req_<uuid>`) is generated for tracing and logging.
 3. **Prompt Composition**:
-   - Assembles the core analytical instruction with any optional user custom instructions stored in settings.
-   - Attaches the complete list of immutable source units as formatted JSON.
+   - Assembles the core analytical instruction (`text-dynamics-2`) instructing Gemini to group contiguous atomic units into semantically coherent dynamic segments (`s001`, `s002`, ...).
+   - Clarifies the 4 independent dynamic dimensions: Intensity (0..10), Tension (0..10), Valence (-10..10), and Temperature (-10..10).
+   - Passes structural unit text to Gemini without character indices.
 4. **Structured Schema Enforcement**:
    - Google's `response_schema` parameter is passed in the request body, strictly constraining the model output to valid JSON matching `CanonicalAnalysis`.
 5. **HTTPS Transmission & Backoff**:
    - Transmitted via `reqwest::Client`.
    - On HTTP 429 (Rate Limit) or 5xx (Server Error), the client automatically pauses and retries up to 3 times with exponential backoff.
-6. **Two-Stage Validation**:
+6. **Two-Stage Validation & Strict Contiguity**:
    - **Syntactic Parsing**: Serde validates JSON compliance with `CanonicalAnalysis`.
-   - **Semantic Integrity Check**: Validates unit coverage, contiguity, and ID references.
+   - **Semantic Integrity Check**: Validates that segments strictly cover all atomic units without gaps, overlaps, or reordering (segment 0 starts at `u0001`, each subsequent segment starts at `last_end + 1`, and the final segment ends at the final unit). Logs warnings if the model heavily under-segments or over-segments.
 
 ---
 

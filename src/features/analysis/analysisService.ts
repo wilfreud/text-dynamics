@@ -19,10 +19,14 @@ export interface AnalysisModelResult {
 export async function requestDocumentAnalysis(
   documentId: string,
   customInstruction?: string,
-  modelOverride?: string
+  modelOverride?: string,
+  units?: Array<{ id: string; text: string }>
 ): Promise<AnalysisModelResult> {
-  logger.info("Requesting analysis for document id={documentId}", { documentId });
-  const record = await ipcAnalyzeDocument(documentId, customInstruction, modelOverride);
+  logger.info("Requesting analysis for document id={documentId} units={unitCount}", {
+    documentId,
+    unitCount: units?.length,
+  });
+  const record = await ipcAnalyzeDocument(documentId, customInstruction, modelOverride, units);
 
   const analysis: CanonicalAnalysis = JSON.parse(record.raw_analysis_json);
   let overrides: UserOverrides | undefined;
