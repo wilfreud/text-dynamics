@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "../../components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "../../components/ui/sheet";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
@@ -115,6 +115,9 @@ export function HistoryDialog({
   // Action status feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [confirmClearActivity, setConfirmClearActivity] = useState(false);
+  const [confirmClearLogs, setConfirmClearLogs] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   // Load Sessions
   const loadSessions = useCallback(async () => {
@@ -324,36 +327,43 @@ export function HistoryDialog({
   };
 
   // Clear Activity
-  const handleClearActivity = async () => {
-    if (!window.confirm("Are you sure you want to clear all activity history? This cannot be undone.")) {
-      return;
-    }
+  const handleExecuteClearActivity = async () => {
+    setIsClearing(true);
     try {
       await clearActivityHistory();
       setActivityEvents([]);
       setActivityTotalCount(0);
       setActivityHasMore(false);
+      setConfirmClearActivity(false);
       setActionMessage("Activity history cleared");
-      setTimeout(() => setActionMessage(null), 2000);
+      await loadSessions();
+      setTimeout(() => setActionMessage(null), 2500);
     } catch (err) {
       console.error("Failed to clear activity:", err);
+      setActionMessage("Failed to clear activity");
+      setTimeout(() => setActionMessage(null), 3000);
+    } finally {
+      setIsClearing(false);
     }
   };
 
   // Clear Diagnostic Logs
-  const handleClearLogs = async () => {
-    if (!window.confirm("Are you sure you want to delete all diagnostic log files?")) {
-      return;
-    }
+  const handleExecuteClearLogs = async () => {
+    setIsClearing(true);
     try {
       await clearDiagnosticLogs();
       setDiagnosticLogs([]);
       setDiagnosticsTotalCount(0);
       setDiagnosticsHasMore(false);
+      setConfirmClearLogs(false);
       setActionMessage("Diagnostic logs cleared");
-      setTimeout(() => setActionMessage(null), 2000);
+      setTimeout(() => setActionMessage(null), 2500);
     } catch (err) {
       console.error("Failed to clear logs:", err);
+      setActionMessage("Failed to clear logs");
+      setTimeout(() => setActionMessage(null), 3000);
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -442,18 +452,21 @@ export function HistoryDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col p-0 gap-0 overflow-hidden font-sans border-border/80 shadow-2xl">
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="p-0 gap-0 flex flex-col h-full font-sans border-l border-border/80 shadow-2xl sm:w-[40vw] sm:min-w-[400px] sm:max-w-[680px]"
+      >
         {/* Header */}
-        <DialogHeader className="p-4 pb-3 border-b border-border/70 flex flex-row items-center justify-between shrink-0">
+        <SheetHeader className="p-4 pb-3 border-b border-border/70 flex flex-row items-center justify-between shrink-0">
           <div className="space-y-0.5">
-            <DialogTitle className="text-base font-semibold flex items-center gap-2">
+            <SheetTitle className="text-base font-semibold flex items-center gap-2">
               <Activity className="size-4 text-foreground/80" />
               <span>History & Diagnostics</span>
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
+            </SheetTitle>
+            <SheetDescription className="text-xs text-muted-foreground">
               User activity log and runtime technical diagnostics
-            </DialogDescription>
+            </SheetDescription>
           </div>
 
           <div className="flex items-center gap-2 pr-6">
@@ -476,7 +489,7 @@ export function HistoryDialog({
               <span>Refresh</span>
             </Button>
           </div>
-        </DialogHeader>
+        </SheetHeader>
 
         {/* Tab Selector & Controls */}
         <div className="p-3 border-b border-border/60 bg-muted/20 flex flex-col gap-2.5 shrink-0">
@@ -498,47 +511,97 @@ export function HistoryDialog({
             <div className="flex items-center gap-2">
               {activeTab === "diagnostics" && (
                 <>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={handleOpenFolder}
-                    className="gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground"
-                    title="Open Logs Folder in Finder"
-                  >
-                    <FolderOpen className="size-3.5" />
-                    <span>Open Logs Folder</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={handleClearLogs}
-                    className="gap-1 text-xs text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-                    title="Clear Log Files"
-                  >
-                    <Trash2 className="size-3.5" />
-                    <span>Clear Logs</span>
-                  </Button>
+                  {!confirmClearLogs && (
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={handleOpenFolder}
+                      className="gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground"
+                      title="Open Logs Folder in Finder"
+                    >
+                      <FolderOpen className="size-3.5" />
+                      <span>Open Logs</span>
+                    </Button>
+                  )}
+                  {confirmClearLogs ? (
+                    <div className="flex items-center gap-1.5 animate-in fade-in-0 duration-150">
+                      <span className="text-[11px] text-destructive font-medium">Delete logs?</span>
+                      <Button
+                        variant="destructive"
+                        size="xs"
+                        onClick={handleExecuteClearLogs}
+                        disabled={isClearing}
+                        className="h-6 px-2 text-[11px] font-medium"
+                      >
+                        Confirm
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setConfirmClearLogs(false)}
+                        disabled={isClearing}
+                        className="h-6 px-1.5 text-[11px] text-muted-foreground"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setConfirmClearLogs(true)}
+                      className="gap-1 text-xs text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                      title="Clear Log Files"
+                    >
+                      <Trash2 className="size-3.5" />
+                      <span>Clear</span>
+                    </Button>
+                  )}
                 </>
               )}
               {activeTab === "activity" && (
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={handleClearActivity}
-                  className="gap-1 text-xs text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-                  title="Clear Activity Events History"
-                >
-                  <Trash2 className="size-3.5" />
-                  <span>Clear History</span>
-                </Button>
+                confirmClearActivity ? (
+                  <div className="flex items-center gap-1.5 animate-in fade-in-0 duration-150">
+                    <span className="text-[11px] text-destructive font-medium">Clear history?</span>
+                    <Button
+                      variant="destructive"
+                      size="xs"
+                      onClick={handleExecuteClearActivity}
+                      disabled={isClearing}
+                      className="h-6 px-2 text-[11px] font-medium"
+                    >
+                      Confirm
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setConfirmClearActivity(false)}
+                      disabled={isClearing}
+                      className="h-6 px-1.5 text-[11px] text-muted-foreground"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setConfirmClearActivity(true)}
+                    className="gap-1 text-xs text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                    title="Clear Activity Events History"
+                  >
+                    <Trash2 className="size-3.5" />
+                    <span>Clear History</span>
+                  </Button>
+                )
               )}
             </div>
           </div>
 
           {/* Search and Filters Bar */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
+          <div className="flex flex-col gap-2">
             {/* Search Input */}
-            <div className="md:col-span-3 relative">
+            <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
               <Input
                 value={query}
@@ -548,79 +611,82 @@ export function HistoryDialog({
               />
             </div>
 
-            {/* Session Filter */}
-            <div className="md:col-span-3">
-              <select
-                value={selectedSessionId}
-                onChange={(e) => setSelectedSessionId(e.target.value)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-sans text-foreground outline-none focus:border-ring"
-              >
-                <option value="current">Current session</option>
-                <option value="all">All sessions</option>
-                {sessions.map((s) => (
-                  <option key={s.sessionId} value={s.sessionId}>
-                    {s.isCurrent
-                      ? `Current (${formatFriendlyDate(s.firstEventAt)})`
-                      : `${formatFriendlyDate(s.firstEventAt)} (${s.eventCount} events)`}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Filters Row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
+              {/* Session Filter */}
+              <div>
+                <select
+                  value={selectedSessionId}
+                  onChange={(e) => setSelectedSessionId(e.target.value)}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-sans text-foreground outline-none focus:border-ring truncate"
+                >
+                  <option value="current">Current session</option>
+                  <option value="all">All sessions</option>
+                  {sessions.map((s) => (
+                    <option key={s.sessionId} value={s.sessionId}>
+                      {s.isCurrent
+                        ? `Current (${formatFriendlyDate(s.firstEventAt)})`
+                        : `${formatFriendlyDate(s.firstEventAt)} (${s.eventCount} events)`}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Document Filter (for Activity & Diagnostics) */}
-            <div className="md:col-span-2">
-              <select
-                value={selectedDocId}
-                onChange={(e) => setSelectedDocId(e.target.value)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-sans text-foreground outline-none focus:border-ring"
-              >
-                <option value="all">All documents</option>
-                {currentDocumentId && (
-                  <option value="current">
-                    Current: {currentDocumentTitle || "Untitled"}
-                  </option>
-                )}
-                {activeTab === "activity" && (
-                  <option value="none">App-level</option>
-                )}
-              </select>
-            </div>
+              {/* Document Filter (for Activity & Diagnostics) */}
+              <div>
+                <select
+                  value={selectedDocId}
+                  onChange={(e) => setSelectedDocId(e.target.value)}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-sans text-foreground outline-none focus:border-ring truncate"
+                >
+                  <option value="all">All docs</option>
+                  {currentDocumentId && (
+                    <option value="current">
+                      Current: {currentDocumentTitle || "Untitled"}
+                    </option>
+                  )}
+                  {activeTab === "activity" && (
+                    <option value="none">App-level</option>
+                  )}
+                </select>
+              </div>
 
-            {/* Level Filter */}
-            <div className="md:col-span-2">
-              <select
-                value={selectedLevel}
-                onChange={(e) => setSelectedLevel(e.target.value)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-sans text-foreground outline-none focus:border-ring"
-              >
-                <option value="all">All levels</option>
-                <option value="info">Info</option>
-                <option value="warn">Warn</option>
-                <option value="error">Error</option>
-                <option value="debug">Debug</option>
-              </select>
-            </div>
+              {/* Level Filter */}
+              <div>
+                <select
+                  value={selectedLevel}
+                  onChange={(e) => setSelectedLevel(e.target.value)}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-sans text-foreground outline-none focus:border-ring"
+                >
+                  <option value="all">All levels</option>
+                  <option value="info">Info</option>
+                  <option value="warn">Warn</option>
+                  <option value="error">Error</option>
+                  <option value="debug">Debug</option>
+                </select>
+              </div>
 
-            {/* Category Filter */}
-            <div className="md:col-span-2">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-sans text-foreground outline-none focus:border-ring"
-              >
-                <option value="all">All categories</option>
-                <option value="app">app</option>
-                <option value="document">document</option>
-                <option value="analysis">analysis</option>
-                <option value="settings">settings</option>
-                <option value="security">security</option>
-              </select>
+              {/* Category Filter */}
+              <div>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-sans text-foreground outline-none focus:border-ring"
+                >
+                  <option value="all">All categories</option>
+                  <option value="app">app</option>
+                  <option value="document">document</option>
+                  <option value="analysis">analysis</option>
+                  <option value="settings">settings</option>
+                  <option value="security">security</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto min-h-[360px] max-h-[58vh] divide-y divide-border/40 bg-background/50">
+        <div className="flex-1 overflow-y-auto divide-y divide-border/40 bg-background/50">
           {activeTab === "activity" ? (
             // Activity Events List
             !activityEvents || activityEvents.length === 0 ? (
@@ -927,7 +993,10 @@ export function HistoryDialog({
             Privacy: API keys and source texts are never logged
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
+
+export const HistorySheet = HistoryDialog;
+

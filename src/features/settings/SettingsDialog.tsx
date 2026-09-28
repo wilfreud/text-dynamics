@@ -229,7 +229,8 @@ export function SettingsDialog({
   }, [models, modelInput, isLoadingModels]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md gap-5 font-sans sm:max-w-lg">
         <DialogHeader className="gap-1 border-b border-border/60 pb-3">
           <DialogTitle className="text-base font-semibold tracking-tight">
@@ -363,16 +364,8 @@ export function SettingsDialog({
             <div className="relative">
               <select
                 value={modelInput}
-                onChange={async (e) => {
-                  const newModel = e.target.value;
-                  setModelInput(newModel);
-                  try {
-                    await saveAppSettings({ modelId: newModel });
-                    setSettings((prev) => ({ ...prev, modelId: newModel }));
-                    onSettingsSaved?.();
-                  } catch {
-                    // Handled in service logs
-                  }
+                onChange={(e) => {
+                  setModelInput(e.target.value);
                 }}
                 disabled={!settings.hasApiKey || (models.length === 0 && isLoadingModels)}
                 className="w-full appearance-none rounded-md border border-input bg-background px-3 py-2 text-xs font-mono text-foreground shadow-xs transition-colors focus:border-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
@@ -554,13 +547,14 @@ export function SettingsDialog({
             {isSavingGeneral ? "Saving..." : "Apply & Close"}
           </Button>
         </DialogFooter>
-
-        {/* Local Data Cleanup Modal */}
-        <CleanupDialog
-          open={isCleanupOpen}
-          onOpenChange={setIsCleanupOpen}
-        />
       </DialogContent>
     </Dialog>
+
+    {/* Local Data Cleanup Modal rendered at root level, never nested inside DialogContent */}
+    <CleanupDialog
+      open={isCleanupOpen}
+      onOpenChange={setIsCleanupOpen}
+    />
+  </>
   );
 }

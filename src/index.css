@@ -120,11 +120,13 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
   body {
     @apply bg-background text-foreground;
-    }
+    /* Prevent Radix UI / react-remove-scroll from permanently freezing pointer events on body */
+    pointer-events: auto !important;
+  }
   html {
     @apply font-sans;
-    }
+  }
 }
