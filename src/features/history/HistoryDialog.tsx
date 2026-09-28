@@ -162,12 +162,12 @@ export function HistoryDialog({
         });
 
         if (append) {
-          setActivityEvents((prev) => [...prev, ...res.events]);
+          setActivityEvents((prev) => [...(prev || []), ...(res?.events || [])]);
         } else {
-          setActivityEvents(res.events);
+          setActivityEvents(res?.events || []);
         }
-        setActivityTotalCount(res.totalCount);
-        setActivityHasMore(res.hasMore);
+        setActivityTotalCount(res?.totalCount || 0);
+        setActivityHasMore(Boolean(res?.hasMore));
         setActivityOffset(offset);
       } catch (err) {
         console.error("Failed to load activity events:", err);
@@ -208,12 +208,12 @@ export function HistoryDialog({
         });
 
         if (append) {
-          setDiagnosticLogs((prev) => [...prev, ...res.entries]);
+          setDiagnosticLogs((prev) => [...(prev || []), ...(res?.logs || [])]);
         } else {
-          setDiagnosticLogs(res.entries);
+          setDiagnosticLogs(res?.logs || []);
         }
-        setDiagnosticsTotalCount(res.totalCount);
-        setDiagnosticsHasMore(res.hasMore);
+        setDiagnosticsTotalCount(res?.totalCount || 0);
+        setDiagnosticsHasMore(Boolean(res?.hasMore));
         setDiagnosticsOffset(offset);
       } catch (err) {
         console.error("Failed to load diagnostic logs:", err);
@@ -623,7 +623,7 @@ export function HistoryDialog({
         <div className="flex-1 overflow-y-auto min-h-[360px] max-h-[58vh] divide-y divide-border/40 bg-background/50">
           {activeTab === "activity" ? (
             // Activity Events List
-            activityEvents.length === 0 ? (
+            !activityEvents || activityEvents.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
                 <Activity className="size-8 stroke-[1.5] mb-2 opacity-40" />
                 <p className="text-sm font-medium">No activity events found</p>
@@ -633,7 +633,7 @@ export function HistoryDialog({
               </div>
             ) : (
               <div className="divide-y divide-border/40 font-sans">
-                {activityEvents.map((event) => {
+                {(activityEvents || []).map((event) => {
                   const isExpanded = expandedActivityIds.has(event.id);
                   return (
                     <div
@@ -794,7 +794,7 @@ export function HistoryDialog({
             )
           ) : (
             // Diagnostics Log Entries
-            diagnosticLogs.length === 0 ? (
+            !diagnosticLogs || diagnosticLogs.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
                 <Terminal className="size-8 stroke-[1.5] mb-2 opacity-40" />
                 <p className="text-sm font-medium">No diagnostic logs found</p>
@@ -804,7 +804,7 @@ export function HistoryDialog({
               </div>
             ) : (
               <div className="divide-y divide-border/30 font-mono text-[11px]">
-                {diagnosticLogs.map((log) => {
+                {(diagnosticLogs || []).map((log) => {
                   const isExpanded = expandedLogIds.has(log.id);
                   return (
                     <div
@@ -918,8 +918,8 @@ export function HistoryDialog({
             <span>·</span>
             <span>
               {activeTab === "activity"
-                ? `Showing ${activityEvents.length} of ${activityTotalCount} events`
-                : `Showing ${diagnosticLogs.length} of ${diagnosticsTotalCount} lines`}
+                ? `Showing ${activityEvents?.length || 0} of ${activityTotalCount} events`
+                : `Showing ${diagnosticLogs?.length || 0} of ${diagnosticsTotalCount} lines`}
             </span>
           </div>
 

@@ -238,9 +238,10 @@ export interface DiagnosticLogsFilterDto {
 }
 
 export interface DiagnosticLogsResponseDto {
-  entries: DiagnosticLogEntryDto[];
+  logs: DiagnosticLogEntryDto[];
   totalCount: number;
   hasMore: boolean;
+  logFolderPath?: string;
 }
 
 export async function ipcListActivityEvents(
