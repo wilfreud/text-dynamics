@@ -14,6 +14,15 @@ use crate::secrets::KeyringStore;
 
 const DEFAULT_MODEL: &str = "gemini-3.8-flash";
 
+#[derive(Default)]
+pub struct AnalyzeDocumentOptions<'a> {
+    pub custom_instruction: Option<&'a str>,
+    pub model_override: Option<&'a str>,
+    pub passed_units: Option<Vec<crate::analysis::model::SourceUnit>>,
+    pub on_retry: Option<crate::gemini::RetryCallback>,
+    pub on_attempt: Option<crate::gemini::AttemptCallback>,
+}
+
 pub struct AnalysisService {
     db: Database,
     secrets: KeyringStore,
@@ -32,9 +41,7 @@ impl AnalysisService {
     pub async fn analyze_document(
         &self,
         document_id: &str,
-        custom_instruction: Option<&str>,
-        model_override: Option<&str>,
-        passed_units: Option<Vec<crate::analysis::model::SourceUnit>>,
+        options: AnalyzeDocumentOptions<'_>,
     ) -> Result<AnalysisRecord, AppError> {
         let trimmed_doc_id = document_id.trim();
         if trimmed_doc_id.is_empty() {
@@ -53,7 +60,7 @@ impl AnalysisService {
         let api_key = self.secrets.get_api_key()?.ok_or(AppError::MissingApiKey)?;
 
         // 3. Resolve model setting
-        let model = if let Some(m) = model_override {
+        let model = if let Some(m) = options.model_override {
             m.to_string()
         } else {
             let conn = self.db.conn()?;
@@ -63,7 +70,7 @@ impl AnalysisService {
         };
 
         // 4. Deterministically unitize source text (use frontend-provided atomic units if available)
-        let units = if let Some(provided) = passed_units.filter(|u| !u.is_empty()) {
+        let units = if let Some(provided) = options.passed_units.filter(|u| !u.is_empty()) {
             provided
         } else {
             unitize_text(&doc.content)
@@ -76,20 +83,22 @@ impl AnalysisService {
         }
 
         // 5. Build prompt with versioning
-        let system_prompt = build_system_prompt(custom_instruction);
+        let system_prompt = build_system_prompt(options.custom_instruction);
         let correlation_id = format!("req_{}", Uuid::new_v4().simple());
 
         // 6. Call Gemini API over HTTPS
         let (analysis, raw_analysis_json) = self
             .gemini_client
-            .analyze(
-                &api_key,
-                &model,
-                &system_prompt,
-                &units,
-                &correlation_id,
-                trimmed_doc_id,
-            )
+            .analyze(crate::gemini::AnalysisRequest {
+                api_key: &api_key,
+                model: &model,
+                system_prompt: &system_prompt,
+                source_units: &units,
+                correlation_id: &correlation_id,
+                document_id: trimmed_doc_id,
+                on_retry: options.on_retry,
+                on_attempt: options.on_attempt,
+            })
             .await?;
 
         // 7. Persist validated analysis
@@ -164,7 +173,9 @@ mod tests {
                 .expect("document creation should succeed");
 
             let service = AnalysisService::new(db, secrets);
-            let result = service.analyze_document(&doc.id, None, None, None).await;
+            let result = service
+                .analyze_document(&doc.id, AnalyzeDocumentOptions::default())
+                .await;
 
             match result {
                 Err(AppError::MissingApiKey) => {
@@ -185,7 +196,9 @@ mod tests {
                 .expect("document creation should succeed");
 
             let service = AnalysisService::new(db, secrets);
-            let result = service.analyze_document(&doc.id, None, None, None).await;
+            let result = service
+                .analyze_document(&doc.id, AnalyzeDocumentOptions::default())
+                .await;
 
             match result {
                 Err(AppError::InvalidInput(_)) => {

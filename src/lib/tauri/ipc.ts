@@ -117,6 +117,19 @@ export interface AnalysisOverridesRecordDto {
   updated_at: string;
 }
 
+export interface AnalysisRetryPayload {
+  attempt: number;
+  maxRetries: number;
+  delayMs: number;
+  statusCode?: number;
+  message: string;
+}
+
+export interface AnalysisAttemptPayload {
+  attempt: number;
+  maxAttempts: number;
+}
+
 export async function ipcAnalyzeDocument(
   documentId: string,
   customInstruction?: string,

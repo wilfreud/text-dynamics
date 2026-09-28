@@ -88,3 +88,13 @@ export interface UserOverrides {
   movementOverrides: Record<string, MovementOverride>;
   groups: SegmentGroup[];
 }
+
+export interface AnalysisRetryState {
+  attempt: number;
+  maxRetries: number;
+  delayMs: number;
+  remainingMs: number;
+  statusCode?: number;
+  message: string;
+  isWaiting: boolean;
+}

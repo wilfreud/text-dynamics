@@ -29,11 +29,14 @@ import { GraphAnalyzingState } from "./GraphAnalyzingState";
 import { GraphScanningOverlay } from "./GraphScanningOverlay";
 import { Activity, Loader2, Info, Spline } from "lucide-react";
 
+import type { AnalysisRetryState } from "../types";
+
 interface GraphViewportProps {
   analysis: CanonicalAnalysis | null;
   overrides?: UserOverrides;
   sourceUnits: SourceUnit[];
   isAnalyzing: boolean;
+  retryState?: AnalysisRetryState | null;
   selectedSegmentIds: string[];
   onSelectSegment: (segmentId: string, isMulti: boolean) => void;
   onUpdateSegmentOverride: (segmentId: string, override: SegmentOverride) => void;
@@ -56,6 +59,7 @@ export function GraphViewport({
   overrides,
   sourceUnits,
   isAnalyzing,
+  retryState = null,
   selectedSegmentIds,
   onSelectSegment,
   onUpdateSegmentOverride,
@@ -310,7 +314,23 @@ export function GraphViewport({
       {isAnalyzing && (
         <div className="absolute top-11 inset-x-0 z-20 flex items-center justify-center gap-2 border-b border-border/80 bg-muted/95 py-2 text-xs font-mono text-foreground backdrop-blur-xs animate-in fade-in duration-150">
           <Loader2 className="size-3.5 animate-spin" />
-          <span>Analyzing text dynamics with {modelId}...</span>
+          {retryState ? (
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-foreground">
+                Retry {retryState.attempt}/{retryState.maxRetries}:
+              </span>
+              <span className="text-muted-foreground">
+                {retryState.statusCode === 503
+                  ? "Spike in demand detected (503)"
+                  : retryState.message}
+                {retryState.isWaiting && retryState.remainingMs > 0
+                  ? ` — retrying in ${(retryState.remainingMs / 1000).toFixed(1)}s`
+                  : " — retrying now..."}
+              </span>
+            </div>
+          ) : (
+            <span>Analyzing text dynamics with {modelId}...</span>
+          )}
         </div>
       )}
 
@@ -355,7 +375,7 @@ export function GraphViewport({
                   </div>
                 </div>
               ) : isAnalyzing && !viewModel ? (
-                <GraphAnalyzingState modelId={modelId} />
+                <GraphAnalyzingState modelId={modelId} retryState={retryState} />
               ) : viewModel ? (
                 <div className="relative w-full h-full">
                   <GraphRenderer
@@ -368,7 +388,7 @@ export function GraphViewport({
                     onDragOverride={handleNodeDrag}
                     onDragEnd={onDragEnd}
                   />
-                  {isAnalyzing && <GraphScanningOverlay modelId={modelId} />}
+                  {isAnalyzing && <GraphScanningOverlay modelId={modelId} retryState={retryState} />}
                 </div>
               ) : null}
             </div>

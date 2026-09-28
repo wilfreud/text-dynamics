@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Play, Settings, FolderOpen, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
+import type { AnalysisRetryState } from "@/features/analysis/types";
+
 interface HeaderProps {
   documentTitle: string;
   onTitleChange: (newTitle: string) => void;
@@ -10,6 +12,7 @@ interface HeaderProps {
   onAnalyze: () => void;
   isAnalyzing: boolean;
   canAnalyze: boolean;
+  retryState?: AnalysisRetryState | null;
   onToggleEditor?: () => void;
   isEditorCollapsed?: boolean;
 }
@@ -22,6 +25,7 @@ export function Header({
   onAnalyze,
   isAnalyzing,
   canAnalyze,
+  retryState = null,
   onToggleEditor,
   isEditorCollapsed = false,
 }: HeaderProps) {
@@ -117,7 +121,15 @@ export function Header({
           {isAnalyzing ? (
             <>
               <Loader2 className="size-3.5 animate-spin" />
-              <span>Analyzing...</span>
+              {retryState ? (
+                <span>
+                  {retryState.isWaiting && retryState.remainingMs > 0
+                    ? `Retry ${retryState.attempt}/${retryState.maxRetries} (${(retryState.remainingMs / 1000).toFixed(1)}s)`
+                    : `Retrying (${retryState.attempt}/${retryState.maxRetries})...`}
+                </span>
+              ) : (
+                <span>Analyzing...</span>
+              )}
             </>
           ) : (
             <>

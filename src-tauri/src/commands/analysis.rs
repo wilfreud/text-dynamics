@@ -1,4 +1,5 @@
-use tauri::State;
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::error::AppError;
 use crate::persistence::analyses::{AnalysisOverridesRecord, AnalysisRecord};
@@ -6,19 +7,40 @@ use crate::state::AppState;
 
 #[tauri::command]
 pub async fn analyze_document(
+    app: AppHandle,
     state: State<'_, AppState>,
     document_id: String,
     custom_instruction: Option<String>,
     model_override: Option<String>,
     units: Option<Vec<crate::analysis::model::SourceUnit>>,
 ) -> Result<AnalysisRecord, AppError> {
+    let app_handle_retry = app.clone();
+    let on_retry: crate::gemini::RetryCallback = Arc::new(move |payload| {
+        let _ = app_handle_retry.emit("analysis:retry", &payload);
+        for win in app_handle_retry.webview_windows().values() {
+            let _ = win.emit("analysis:retry", &payload);
+        }
+    });
+
+    let app_handle_attempt = app.clone();
+    let on_attempt: crate::gemini::AttemptCallback = Arc::new(move |payload| {
+        let _ = app_handle_attempt.emit("analysis:attempt", &payload);
+        for win in app_handle_attempt.webview_windows().values() {
+            let _ = win.emit("analysis:attempt", &payload);
+        }
+    });
+
     state
         .analysis
         .analyze_document(
             &document_id,
-            custom_instruction.as_deref(),
-            model_override.as_deref(),
-            units,
+            crate::analysis::AnalyzeDocumentOptions {
+                custom_instruction: custom_instruction.as_deref(),
+                model_override: model_override.as_deref(),
+                passed_units: units,
+                on_retry: Some(on_retry),
+                on_attempt: Some(on_attempt),
+            },
         )
         .await
 }

@@ -3,13 +3,17 @@ import { createScope, animate, type Scope } from "animejs";
 import { prefersReducedMotion } from "./graphAnimation";
 import { Loader2 } from "lucide-react";
 
+import type { AnalysisRetryState } from "../types";
+
 interface GraphScanningOverlayProps {
   modelId?: string;
   width?: number;
+  retryState?: AnalysisRetryState | null;
 }
 
 export function GraphScanningOverlay({
   modelId = "gemini-3.8-flash",
+  retryState = null,
 }: GraphScanningOverlayProps) {
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -47,7 +51,17 @@ export function GraphScanningOverlay({
       {/* Top Floating Telemetry Status Badge */}
       <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full border border-border/80 bg-background/90 px-3.5 py-1 text-xs font-mono text-foreground shadow-xs backdrop-blur-xs">
         <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-        <span>Updating dynamics with {modelId}...</span>
+        {retryState ? (
+          <span>
+            Retry {retryState.attempt}/{retryState.maxRetries}
+            {retryState.isWaiting && retryState.remainingMs > 0
+              ? ` in ${(retryState.remainingMs / 1000).toFixed(1)}s`
+              : " now"}
+            ...
+          </span>
+        ) : (
+          <span>Updating dynamics with {modelId}...</span>
+        )}
       </div>
 
       {/* Sweeping Laser Hairline */}

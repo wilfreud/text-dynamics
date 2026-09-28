@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
 use reqwest::{Client, StatusCode};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::analysis::model::{CanonicalAnalysis, SourceUnit};
@@ -14,10 +15,65 @@ use crate::gemini::schema::analysis_response_schema;
 
 const BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
-const MAX_RETRIES: u32 = 2; // Total up to 3 attempts
+const MAX_RETRIES: u32 = 4; // Up to 4 retries (5 attempts total)
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisRetryPayload {
+    pub attempt: u32,
+    pub max_retries: u32,
+    pub delay_ms: u64,
+    pub status_code: Option<u16>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisAttemptPayload {
+    pub attempt: u32,
+    pub max_attempts: u32,
+}
+
+pub type RetryCallback = std::sync::Arc<dyn Fn(AnalysisRetryPayload) + Send + Sync>;
+pub type AttemptCallback = std::sync::Arc<dyn Fn(AnalysisAttemptPayload) + Send + Sync>;
+
+#[derive(Clone)]
+pub struct AnalysisRequest<'a> {
+    pub api_key: &'a str,
+    pub model: &'a str,
+    pub system_prompt: &'a str,
+    pub source_units: &'a [SourceUnit],
+    pub correlation_id: &'a str,
+    pub document_id: &'a str,
+    pub on_retry: Option<RetryCallback>,
+    pub on_attempt: Option<AttemptCallback>,
+}
 
 pub struct GeminiClient {
     client: Client,
+}
+
+fn compute_retry_backoff(attempt: u32, headers: Option<&reqwest::header::HeaderMap>) -> Duration {
+    // Check Retry-After header if present
+    if let Some(headers) = headers {
+        if let Some(val) = headers.get(reqwest::header::RETRY_AFTER) {
+            if let Ok(s) = val.to_str() {
+                if let Ok(secs) = s.trim().parse::<u64>() {
+                    // Bound to a safe range [1s, 15s]
+                    let clamped = secs.clamp(1, 15);
+                    return Duration::from_secs(clamped);
+                }
+            }
+        }
+    }
+
+    // Progressive backoff schedule: 2s (retry 1), 4s (retry 2), 7s (retry 3), 10s (retry 4)
+    match attempt {
+        1 => Duration::from_millis(2000),
+        2 => Duration::from_millis(4000),
+        3 => Duration::from_millis(7000),
+        _ => Duration::from_millis(10000),
+    }
 }
 
 impl GeminiClient {
@@ -32,32 +88,27 @@ impl GeminiClient {
 
     pub async fn analyze(
         &self,
-        api_key: &str,
-        model: &str,
-        system_prompt: &str,
-        source_units: &[SourceUnit],
-        correlation_id: &str,
-        document_id: &str,
+        req: AnalysisRequest<'_>,
     ) -> Result<(CanonicalAnalysis, String), AppError> {
-        let trimmed_key = api_key.trim();
+        let trimmed_key = req.api_key.trim();
         if trimmed_key.is_empty() {
             return Err(AppError::MissingApiKey);
         }
 
-        let url = format!("{}/{}:generateContent", BASE_URL, model);
-        let units_json = serde_json::to_string(source_units)
+        let url = format!("{}/{}:generateContent", BASE_URL, req.model);
+        let units_json = serde_json::to_string(req.source_units)
             .map_err(|e| AppError::Internal(format!("Failed to serialize source units: {e}")))?;
 
         let user_prompt = format!(
             "Analyze the dynamic structure of the following {} text units:\n{}",
-            source_units.len(),
+            req.source_units.len(),
             units_json
         );
 
         let request_payload = json!({
             "systemInstruction": {
                 "parts": [
-                    { "text": system_prompt }
+                    { "text": req.system_prompt }
                 ]
             },
             "contents": [
@@ -75,21 +126,28 @@ impl GeminiClient {
             }
         });
 
-        let total_chars: usize = source_units.iter().map(|u| u.text.len()).sum();
+        let total_chars: usize = req.source_units.iter().map(|u| u.text.len()).sum();
         let mut attempt = 0;
 
         loop {
             attempt += 1;
             let start_time = Instant::now();
 
+            if let Some(ref cb) = req.on_attempt {
+                cb(AnalysisAttemptPayload {
+                    attempt,
+                    max_attempts: MAX_RETRIES + 1,
+                });
+            }
+
             log::info!(
                 "[req_id={}] Attempt {}/{} -> model={} doc_id={} units={} chars={}",
-                correlation_id,
+                req.correlation_id,
                 attempt,
                 MAX_RETRIES + 1,
-                model,
-                document_id,
-                source_units.len(),
+                req.model,
+                req.document_id,
+                req.source_units.len(),
                 total_chars
             );
 
@@ -107,9 +165,10 @@ impl GeminiClient {
             match res {
                 Ok(response) => {
                     let status = response.status();
+                    let response_headers = response.headers().clone();
                     log::info!(
                         "[req_id={}] Response status={} latency={}ms",
-                        correlation_id,
+                        req.correlation_id,
                         status.as_u16(),
                         duration.as_millis()
                     );
@@ -119,7 +178,11 @@ impl GeminiClient {
                             AppError::NetworkTimeout(format!("Failed reading response body: {e}"))
                         })?;
 
-                        return Self::parse_and_validate(&body_text, source_units, correlation_id);
+                        return Self::parse_and_validate(
+                            &body_text,
+                            req.source_units,
+                            req.correlation_id,
+                        );
                     }
 
                     // Handle known error status codes
@@ -130,7 +193,7 @@ impl GeminiClient {
                         StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
                             log::warn!(
                                 "[req_id={}] Unauthorized API key: {}",
-                                correlation_id,
+                                req.correlation_id,
                                 safe_error_snippet
                             );
                             return Err(AppError::UnauthorizedApiKey);
@@ -138,12 +201,12 @@ impl GeminiClient {
                         StatusCode::NOT_FOUND => {
                             log::warn!(
                                 "[req_id={}] Model not found: {}",
-                                correlation_id,
+                                req.correlation_id,
                                 safe_error_snippet
                             );
                             return Err(AppError::ModelNotFound(format!(
                                 "Model '{}' not found: {}",
-                                model, safe_error_snippet
+                                req.model, safe_error_snippet
                             )));
                         }
                         StatusCode::PAYLOAD_TOO_LARGE | StatusCode::BAD_REQUEST => {
@@ -160,12 +223,26 @@ impl GeminiClient {
                         }
                         StatusCode::TOO_MANY_REQUESTS => {
                             if attempt <= MAX_RETRIES {
-                                let backoff = Duration::from_millis(1000 * (1 << (attempt - 1)));
+                                let backoff =
+                                    compute_retry_backoff(attempt, Some(&response_headers));
+                                let retry_msg =
+                                    "Gemini rate limit reached (429). Retrying...".to_string();
                                 log::warn!(
-                                    "[req_id={}] Rate limit 429. Retrying in {}ms...",
-                                    correlation_id,
+                                    "[req_id={}] Rate limit 429. Retry {}/{} in {}ms...",
+                                    req.correlation_id,
+                                    attempt,
+                                    MAX_RETRIES,
                                     backoff.as_millis()
                                 );
+                                if let Some(ref cb) = req.on_retry {
+                                    cb(AnalysisRetryPayload {
+                                        attempt,
+                                        max_retries: MAX_RETRIES,
+                                        delay_ms: backoff.as_millis() as u64,
+                                        status_code: Some(429),
+                                        message: retry_msg,
+                                    });
+                                }
                                 tokio::time::sleep(backoff).await;
                                 continue;
                             }
@@ -173,13 +250,34 @@ impl GeminiClient {
                         }
                         _ if status.is_server_error() => {
                             if attempt <= MAX_RETRIES {
-                                let backoff = Duration::from_millis(1000 * (1 << (attempt - 1)));
+                                let backoff =
+                                    compute_retry_backoff(attempt, Some(&response_headers));
+                                let retry_msg = if status == StatusCode::SERVICE_UNAVAILABLE {
+                                    "Gemini server is experiencing high demand (503). Retrying..."
+                                        .to_string()
+                                } else {
+                                    format!(
+                                        "Gemini server error ({}). Retrying...",
+                                        status.as_u16()
+                                    )
+                                };
                                 log::warn!(
-                                    "[req_id={}] Server error {}. Retrying in {}ms...",
-                                    correlation_id,
+                                    "[req_id={}] Server error {}. Retry {}/{} in {}ms...",
+                                    req.correlation_id,
                                     status.as_u16(),
+                                    attempt,
+                                    MAX_RETRIES,
                                     backoff.as_millis()
                                 );
+                                if let Some(ref cb) = req.on_retry {
+                                    cb(AnalysisRetryPayload {
+                                        attempt,
+                                        max_retries: MAX_RETRIES,
+                                        delay_ms: backoff.as_millis() as u64,
+                                        status_code: Some(status.as_u16()),
+                                        message: retry_msg,
+                                    });
+                                }
                                 tokio::time::sleep(backoff).await;
                                 continue;
                             }
@@ -200,11 +298,21 @@ impl GeminiClient {
                 Err(err) => {
                     log::warn!(
                         "[req_id={}] Network failure on attempt {}: {err}",
-                        correlation_id,
+                        req.correlation_id,
                         attempt
                     );
                     if attempt <= MAX_RETRIES {
-                        let backoff = Duration::from_millis(1000 * (1 << (attempt - 1)));
+                        let backoff = compute_retry_backoff(attempt, None);
+                        let retry_msg = "Network connection interrupted. Retrying...".to_string();
+                        if let Some(ref cb) = req.on_retry {
+                            cb(AnalysisRetryPayload {
+                                attempt,
+                                max_retries: MAX_RETRIES,
+                                delay_ms: backoff.as_millis() as u64,
+                                status_code: None,
+                                message: retry_msg,
+                            });
+                        }
                         tokio::time::sleep(backoff).await;
                         continue;
                     }

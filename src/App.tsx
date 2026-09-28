@@ -31,12 +31,17 @@ import type {
   MovementKind,
   SegmentOverride,
   UserOverrides,
+  AnalysisRetryState,
 } from "./features/analysis/types";
 import type { MetricKind } from "./features/analysis/graph/graphTypes";
 import { unitizeText } from "./features/analysis/unitization";
 import { parseAppError, type ParsedAppError } from "./lib/errors";
 import { getLogger } from "./lib/logging";
-import { ipcSyncWordWrapMenu } from "./lib/tauri/ipc";
+import {
+  ipcSyncWordWrapMenu,
+  type AnalysisRetryPayload,
+  type AnalysisAttemptPayload,
+} from "./lib/tauri/ipc";
 
 const logger = getLogger(["ui", "app"]);
 
@@ -142,7 +147,83 @@ export default function App() {
     groups: [],
   });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [retryState, setRetryState] = useState<AnalysisRetryState | null>(null);
   const [activeError, setActiveError] = useState<ParsedAppError | null>(null);
+
+  // Listen for backend analysis retry & attempt events
+  useEffect(() => {
+    let unlistenRetry: (() => void) | undefined;
+    let unlistenAttempt: (() => void) | undefined;
+
+    listen<AnalysisRetryPayload>("analysis:retry", (event) => {
+      logger.warn("Analysis retry event: attempt={attempt}/{maxRetries} delay={delayMs}ms", {
+        attempt: event.payload.attempt,
+        maxRetries: event.payload.maxRetries,
+        delayMs: event.payload.delayMs,
+      });
+      setRetryState({
+        attempt: event.payload.attempt,
+        maxRetries: event.payload.maxRetries,
+        delayMs: event.payload.delayMs,
+        remainingMs: event.payload.delayMs,
+        statusCode: event.payload.statusCode,
+        message: event.payload.message,
+        isWaiting: true,
+      });
+    })
+      .then((unsub) => {
+        unlistenRetry = unsub;
+      })
+      .catch((err) => {
+        logger.error("Failed to register analysis:retry listener: {err}", { err: String(err) });
+      });
+
+    listen<AnalysisAttemptPayload>("analysis:attempt", (event) => {
+      logger.info("Analysis attempt event: attempt={attempt}/{maxAttempts}", {
+        attempt: event.payload.attempt,
+        maxAttempts: event.payload.maxAttempts,
+      });
+      if (event.payload.attempt > 1) {
+        setRetryState((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            remainingMs: 0,
+            isWaiting: false,
+          };
+        });
+      }
+    })
+      .then((unsub) => {
+        unlistenAttempt = unsub;
+      })
+      .catch((err) => {
+        logger.error("Failed to register analysis:attempt listener: {err}", { err: String(err) });
+      });
+
+    return () => {
+      unlistenRetry?.();
+      unlistenAttempt?.();
+    };
+  }, []);
+
+  // Live countdown tick for retry remaining time
+  useEffect(() => {
+    if (!retryState || !retryState.isWaiting || retryState.remainingMs <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setRetryState((prev) => {
+        if (!prev || !prev.isWaiting) return prev;
+        const nextRemaining = Math.max(0, prev.remainingMs - 100);
+        return {
+          ...prev,
+          remainingMs: nextRemaining,
+        };
+      });
+    }, 100);
+
+    return () => window.clearInterval(timer);
+  }, [retryState?.isWaiting, retryState?.remainingMs]);
 
   // Segment selection state (supports multi-selection)
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
@@ -313,6 +394,7 @@ export default function App() {
     await flushPendingSave();
 
     setIsAnalyzing(true);
+    setRetryState(null);
     setActiveError(null);
 
     try {
@@ -350,6 +432,7 @@ export default function App() {
       // Invariant: We intentionally do NOT clear `currentAnalysis` so previous valid analysis is preserved!
     } finally {
       setIsAnalyzing(false);
+      setRetryState(null);
     }
   }
 
@@ -553,6 +636,7 @@ export default function App() {
         onAnalyze={handleAnalyze}
         isAnalyzing={isAnalyzing}
         canAnalyze={editorContent.trim().length > 0}
+        retryState={retryState}
         onToggleEditor={handleToggleEditor}
         isEditorCollapsed={editorCollapsed}
       />
@@ -604,6 +688,7 @@ export default function App() {
             overrides={currentOverrides}
             sourceUnits={unitization.units}
             isAnalyzing={isAnalyzing}
+            retryState={retryState}
             selectedSegmentIds={selectedSegmentIds}
             onSelectSegment={handleSelectSegment}
             onUpdateSegmentOverride={handleUpdateSegmentOverride}

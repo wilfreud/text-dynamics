@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { createScope, animate, stagger, type Scope } from "animejs";
 import { prefersReducedMotion } from "./graphAnimation";
 
+import type { AnalysisRetryState } from "../types";
+
 interface GraphAnalyzingStateProps {
   modelId?: string;
+  retryState?: AnalysisRetryState | null;
 }
 
 const ANALYSIS_STEPS = [
@@ -15,6 +18,7 @@ const ANALYSIS_STEPS = [
 
 export function GraphAnalyzingState({
   modelId = "gemini-3.8-flash",
+  retryState = null,
 }: GraphAnalyzingStateProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -103,15 +107,39 @@ export function GraphAnalyzingState({
           </svg>
         </div>
 
-        {/* Text Status Header */}
-        <div className="space-y-1.5">
-          <h2 className="font-heading text-base font-semibold tracking-tight text-foreground">
-            Analyzing Text Dynamics
-          </h2>
-          <p className="text-xs leading-relaxed text-muted-foreground transition-all duration-300 min-h-[1.5rem] font-mono flex items-center justify-center">
-            {ANALYSIS_STEPS[currentStepIndex]}
-          </p>
-        </div>
+        {/* Text Status Header or Dynamic Retry Banner */}
+        {retryState ? (
+          <div className="mx-auto flex max-w-sm flex-col gap-1.5 rounded-md border border-border/80 bg-muted/60 p-3 text-center font-mono text-xs text-foreground shadow-xs animate-in fade-in duration-200">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 font-semibold text-foreground">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-foreground opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-foreground"></span>
+                </span>
+                {retryState.statusCode === 503 ? "Spike in Demand (503)" : `Server Busy (${retryState.statusCode ?? 503})`}
+              </span>
+              <span className="rounded bg-background px-2 py-0.5 text-[11px] font-bold border border-border/80">
+                Retry {retryState.attempt}/{retryState.maxRetries}
+              </span>
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {retryState.isWaiting && retryState.remainingMs > 0 ? (
+                <>Next attempt in <strong className="text-foreground tabular-nums">{(retryState.remainingMs / 1000).toFixed(1)}s</strong></>
+              ) : (
+                <strong className="text-foreground">Dispatching attempt now...</strong>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <h2 className="font-heading text-base font-semibold tracking-tight text-foreground">
+              Analyzing Text Dynamics
+            </h2>
+            <p className="text-xs leading-relaxed text-muted-foreground transition-all duration-300 min-h-[1.5rem] font-mono flex items-center justify-center">
+              {ANALYSIS_STEPS[currentStepIndex]}
+            </p>
+          </div>
+        )}
 
         {/* Hero Animated SVG Semantic Graph Canvas */}
         <div className="relative rounded-lg border border-border/80 bg-card p-3 shadow-xs overflow-hidden">
@@ -214,7 +242,7 @@ export function GraphAnalyzingState({
               className="fill-muted-foreground/60 text-[8.5px] font-mono uppercase tracking-wider"
               stroke="none"
             >
-              [SCAN: ACTIVE]
+              {retryState ? `[RETRY: ${retryState.attempt}/${retryState.maxRetries}]` : "[SCAN: ACTIVE]"}
             </text>
             <text
               x="508"
@@ -223,7 +251,9 @@ export function GraphAnalyzingState({
               className="fill-muted-foreground/60 text-[8.5px] font-mono tracking-wider"
               stroke="none"
             >
-              λ: DYNAMICS_GRAPH
+              {retryState && retryState.isWaiting && retryState.remainingMs > 0
+                ? `T-${(retryState.remainingMs / 1000).toFixed(1)}S`
+                : "λ: DYNAMICS_GRAPH"}
             </text>
           </svg>
         </div>
