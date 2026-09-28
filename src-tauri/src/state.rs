@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use crate::analysis::service::AnalysisService;
 use crate::persistence::Database;
@@ -10,6 +12,7 @@ pub struct AppState {
     pub analysis: AnalysisService,
     pub session_id: String,
     pub log_dir: PathBuf,
+    pub is_cleaning_up: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -21,6 +24,7 @@ impl AppState {
             analysis,
             session_id,
             log_dir,
+            is_cleaning_up: Arc::new(AtomicBool::new(false)),
         }
     }
 }

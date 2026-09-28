@@ -15,6 +15,14 @@ pub fn create_document(
     title: String,
     content: String,
 ) -> Result<DocumentRecord, AppError> {
+    if state
+        .is_cleaning_up
+        .load(std::sync::atomic::Ordering::Relaxed)
+    {
+        return Err(AppError::InvalidInput(
+            "Operation rejected: local data cleanup is in progress".into(),
+        ));
+    }
     let doc = repo_create(&state.db, &title, &content)?;
     let meta = serde_json::json!({
         "title": doc.title,
@@ -74,6 +82,14 @@ pub fn update_document(
     title: Option<String>,
     content: Option<String>,
 ) -> Result<DocumentRecord, AppError> {
+    if state
+        .is_cleaning_up
+        .load(std::sync::atomic::Ordering::Relaxed)
+    {
+        return Err(AppError::InvalidInput(
+            "Operation rejected: local data cleanup is in progress".into(),
+        ));
+    }
     let trimmed_id = id.trim();
     if trimmed_id.is_empty() {
         return Err(AppError::InvalidInput("Document ID cannot be empty".into()));
@@ -107,6 +123,14 @@ pub fn delete_document(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<(), AppError> {
+    if state
+        .is_cleaning_up
+        .load(std::sync::atomic::Ordering::Relaxed)
+    {
+        return Err(AppError::InvalidInput(
+            "Operation rejected: local data cleanup is in progress".into(),
+        ));
+    }
     let trimmed_id = id.trim();
     if trimmed_id.is_empty() {
         return Err(AppError::InvalidInput("Document ID cannot be empty".into()));

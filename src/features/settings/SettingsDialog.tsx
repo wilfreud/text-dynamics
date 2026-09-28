@@ -17,6 +17,7 @@ import {
   saveAppSettings,
   fetchGeminiModelCatalog,
 } from "./settingsService";
+import { CleanupDialog } from "./CleanupDialog";
 import type { AppSettings, GeminiModelOption, BillingAvailability } from "./types";
 import { parseAppError } from "../../lib/errors";
 import {
@@ -86,6 +87,7 @@ export function SettingsDialog({
   const [modelInput, setModelInput] = useState("gemini-3.8-flash");
   const [instructionInput, setInstructionInput] = useState("");
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
+  const [isCleanupOpen, setIsCleanupOpen] = useState(false);
 
   // Load catalog using stored API key
   const loadModels = useCallback(async (hasKey: boolean) => {
@@ -488,6 +490,37 @@ export function SettingsDialog({
             </p>
           </div>
 
+          <div className="border-t border-border/40" />
+
+          {/* Section: Advanced (Local Data Reset) */}
+          <div className="space-y-2.5">
+            <label className="block font-medium text-foreground text-xs uppercase tracking-wider font-mono text-muted-foreground">
+              Advanced
+            </label>
+            <div className="rounded-md border border-border/80 bg-muted/15 p-3 space-y-2.5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-foreground">
+                    Delete All Local Data
+                  </p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Removing Text Dynamics from Applications does not automatically remove its local data from macOS. Use this option to perform a complete local reset (documents, logs, database, and Keychain credentials).
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  onClick={() => setIsCleanupOpen(true)}
+                  className="shrink-0 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive text-xs gap-1"
+                >
+                  <Trash2 className="size-3" />
+                  <span>Reset Data</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+
           {/* Author & Project Info */}
           <div className="flex items-center justify-between border-t border-border/40 pt-2 text-[11px] text-muted-foreground">
             <span>Text Dynamics v0.1.0</span>
@@ -521,6 +554,12 @@ export function SettingsDialog({
             {isSavingGeneral ? "Saving..." : "Apply & Close"}
           </Button>
         </DialogFooter>
+
+        {/* Local Data Cleanup Modal */}
+        <CleanupDialog
+          open={isCleanupOpen}
+          onOpenChange={setIsCleanupOpen}
+        />
       </DialogContent>
     </Dialog>
   );

@@ -15,6 +15,14 @@ pub async fn analyze_document(
     model_override: Option<String>,
     units: Option<Vec<crate::analysis::model::SourceUnit>>,
 ) -> Result<AnalysisRecord, AppError> {
+    if state
+        .is_cleaning_up
+        .load(std::sync::atomic::Ordering::Relaxed)
+    {
+        return Err(AppError::InvalidInput(
+            "Operation rejected: local data cleanup is in progress".into(),
+        ));
+    }
     let start_meta = serde_json::json!({
         "modelOverride": model_override.as_deref(),
         "hasCustomInstruction": custom_instruction.is_some(),

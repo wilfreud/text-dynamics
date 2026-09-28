@@ -55,6 +55,20 @@ impl Database {
         &self.resolved_path
     }
 
+    pub fn close_and_release(&self) -> Result<(), AppError> {
+        let mut guard = self
+            .conn
+            .lock()
+            .map_err(|e| AppError::Internal(format!("Database mutex lock poisoned: {e}")))?;
+
+        let _ = guard.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+        if let Ok(in_mem) = Connection::open_in_memory() {
+            *guard = in_mem;
+        }
+
+        Ok(())
+    }
+
     pub fn diagnostics(&self) -> DatabaseDiagnostics {
         let status = match self.conn() {
             Ok(_) => "open".to_string(),

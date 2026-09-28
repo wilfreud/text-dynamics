@@ -275,3 +275,26 @@ export async function ipcClearDiagnosticLogs(): Promise<void> {
   return invoke<void>("clear_diagnostic_logs");
 }
 
+export interface CleanupResultDto {
+  database: string;
+  logs: string;
+  keychain: string;
+  cache: string;
+  preferences: string;
+  allSucceeded: boolean;
+  errorDetails?: string | null;
+}
+
+export async function ipcDeleteAllLocalData(): Promise<CleanupResultDto> {
+  return invoke<CleanupResultDto>("delete_all_local_data");
+}
+
+export async function ipcRestartApp(): Promise<void> {
+  return invoke<void>("restart_app");
+}
+
+export async function ipcQuitApp(): Promise<void> {
+  return invoke<void>("quit_app");
+}
+
+

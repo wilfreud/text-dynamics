@@ -193,6 +193,9 @@ pub fn run() {
             commands::history::open_logs_folder,
             commands::history::clear_activity_history,
             commands::history::clear_diagnostic_logs,
+            commands::cleanup::delete_all_local_data,
+            commands::cleanup::restart_app,
+            commands::cleanup::quit_app,
         ])
         .on_menu_event(|app, event| {
             if event.id() == "toggle_word_wrap" {
