@@ -53,8 +53,8 @@ export function Header({
 
   return (
     <header className="flex h-12 w-full items-center justify-between border-b border-border/80 bg-card px-4 select-none">
-      {/* Left: Document Selector & Editable Title */}
-      <div className="flex items-center gap-3 min-w-0 max-w-[50%]">
+      {/* Left: Document Selector, Desktop Menus & Editable Title */}
+      <div className="flex items-center gap-2.5 min-w-0 max-w-[60%]">
         <Button
           variant="outline"
           size="xs"
@@ -140,3 +140,4 @@ export function Header({
     </header>
   );
 }
+

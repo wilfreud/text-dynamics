@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import { Header } from "./components/Header";
 import { StatusBar } from "./components/StatusBar";
@@ -35,6 +36,7 @@ import type { MetricKind } from "./features/analysis/graph/graphTypes";
 import { unitizeText } from "./features/analysis/unitization";
 import { parseAppError, type ParsedAppError } from "./lib/errors";
 import { getLogger } from "./lib/logging";
+import { ipcSyncWordWrapMenu } from "./lib/tauri/ipc";
 
 const logger = getLogger(["ui", "app"]);
 
@@ -62,6 +64,59 @@ export default function App() {
   const editorPanelRef = usePanelRef();
   const [editorCollapsed, setEditorCollapsed] = useState(false);
 
+  // Word wrap state with local persistence
+  const [wordWrap, setWordWrap] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("text-dynamics.editor.word-wrap");
+      return saved !== null ? saved === "true" : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleWordWrap = useCallback(() => {
+    setWordWrap((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("text-dynamics.editor.word-wrap", String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  // Listen to native Tauri menu "menu:toggle-word-wrap" event
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("menu:toggle-word-wrap", () => {
+      handleToggleWordWrap();
+    })
+      .then((unsub) => {
+        unlisten = unsub;
+      })
+      .catch(() => {});
+
+    return () => {
+      unlisten?.();
+    };
+  }, [handleToggleWordWrap]);
+
+  // Global keyboard shortcut for Word Wrap (Alt+Z / Option+Z)
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.altKey && (e.key === "z" || e.key === "Z" || e.code === "KeyZ")) {
+        e.preventDefault();
+        handleToggleWordWrap();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleToggleWordWrap]);
+
+  // Synchronize native macOS menu checkmark
+  useEffect(() => {
+    void ipcSyncWordWrapMenu(wordWrap).catch(() => {});
+  }, [wordWrap]);
+
   // Layout persistence with official useDefaultLayout hook
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "text-dynamics.workspace-layout.v1",
@@ -77,7 +132,6 @@ export default function App() {
       panel.collapse();
     }
   }, [editorPanelRef]);
-
 
   // Analysis state
   const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(null);
@@ -531,6 +585,8 @@ export default function App() {
             onToggleCollapse={handleToggleEditor}
             selectedRange={selectedLineRange}
             onCursorChange={handleEditorCursorChange}
+            wordWrap={wordWrap}
+            onToggleWordWrap={handleToggleWordWrap}
           />
         </ResizablePanel>
 

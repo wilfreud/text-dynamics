@@ -35,7 +35,7 @@ export function MovementInspector({
   const isOverridden = currentMovOverride?.kind !== undefined;
 
   return (
-    <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 w-80 rounded-lg border border-border/80 bg-popover/95 p-4 font-sans text-xs text-popover-foreground shadow-xl backdrop-blur-sm animate-in fade-in zoom-in-95 duration-100 select-none">
+    <div className="flex flex-col h-full w-full bg-card p-4 overflow-y-auto select-none font-sans text-xs text-foreground">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border/50 pb-2">
         <div className="flex items-center gap-1.5 font-mono text-xs font-semibold text-foreground">

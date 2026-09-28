@@ -48,6 +48,9 @@ export function getSegmentSourcePassage(
 
   const { startOffset, endOffset, startLine, endLine } = resolved;
 
+  const startId = segment.startUnitId ?? (segment as any).start_unit_id ?? "";
+  const endId = segment.endUnitId ?? (segment as any).end_unit_id ?? "";
+
   // Defensive validation of boundaries
   if (
     !Number.isInteger(startOffset) ||
@@ -62,19 +65,19 @@ export function getSegmentSourcePassage(
       endOffset,
       startLine,
       endLine,
-      startUnitId: segment.startUnitId,
-      endUnitId: segment.endUnitId,
+      startUnitId: startId,
+      endUnitId: endId,
       characterCount: 0,
-      unitRangeLabel: `${segment.startUnitId}–${segment.endUnitId}`,
+      unitRangeLabel: startId === endId ? startId : `${startId}–${endId}`,
       isValid: false,
     };
   }
 
   const passage = sourceText.slice(startOffset, endOffset);
   const unitRangeLabel =
-    segment.startUnitId === segment.endUnitId
-      ? segment.startUnitId
-      : `${segment.startUnitId}–${segment.endUnitId}`;
+    startId === endId
+      ? startId
+      : `${startId}–${endId}`;
 
   return {
     passage,
@@ -82,8 +85,8 @@ export function getSegmentSourcePassage(
     endOffset,
     startLine,
     endLine,
-    startUnitId: segment.startUnitId,
-    endUnitId: segment.endUnitId,
+    startUnitId: startId,
+    endUnitId: endId,
     characterCount: passage.length,
     unitRangeLabel,
     isValid: true,

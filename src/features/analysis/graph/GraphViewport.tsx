@@ -15,12 +15,18 @@ import {
 import { DEFAULT_VIEWPORT_PADDING } from "./graphGeometry";
 import { buildGraphViewModel } from "./graphViewModel";
 import { GraphRenderer } from "./GraphRenderer";
-import { GraphTooltip, type TooltipTarget } from "./GraphTooltip";
 import { SegmentInspector } from "./SegmentInspector";
 import { MovementInspector } from "./MovementInspector";
 import { GroupManager } from "./GroupManager";
 import { MetricHelpDialog } from "./MetricHelpDialog";
 import { PassageReaderDialog } from "./PassageReaderDialog";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
+import { GraphAnalyzingState } from "./GraphAnalyzingState";
+import { GraphScanningOverlay } from "./GraphScanningOverlay";
 import { Activity, Loader2, Info, Spline } from "lucide-react";
 
 interface GraphViewportProps {
@@ -73,7 +79,6 @@ export function GraphViewport({
   });
 
   const [selectedMetric, setSelectedMetric] = useState<MetricKind>("intensity");
-  const [hoverTarget, setHoverTarget] = useState<TooltipTarget | null>(null);
   const [inspectedMovementId, setInspectedMovementId] = useState<string | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
   const [isMetricHelpOpen, setIsMetricHelpOpen] = useState(false);
@@ -201,15 +206,6 @@ export function GraphViewport({
       : `${readingPoint.startUnitId}–${readingPoint.endUnitId}`;
   }, [readingPoint]);
 
-  // Active target for floating tooltip card (pinned to selected node or hovering)
-  const activeTooltipTarget = useMemo<TooltipTarget | null>(() => {
-    if (isPassageReaderOpen) return null;
-    if (hoverTarget) return hoverTarget;
-    if (singleSelectedPoint) {
-      return { type: "point", point: singleSelectedPoint };
-    }
-    return null;
-  }, [isPassageReaderOpen, hoverTarget, singleSelectedPoint]);
 
   const inspectedMovement = useMemo(() => {
     if (!inspectedMovementId || !analysis) return null;
@@ -318,83 +314,109 @@ export function GraphViewport({
         </div>
       )}
 
-      {/* Main SVG Graph Container */}
-      <div ref={containerRef} className="relative flex-1 min-h-0 min-w-0 w-full h-full overflow-hidden">
-        {!analysis && !isAnalyzing ? (
-          <div className="flex h-full w-full flex-col items-center justify-center p-8 text-center select-none bg-background">
-            <div className="max-w-md space-y-4">
-              <div className="mx-auto flex size-12 items-center justify-center rounded-lg border border-border/80 bg-muted/20">
-                <Activity className="size-6 text-muted-foreground" />
-              </div>
-              <div className="space-y-1.5">
-                <h2 className="font-heading text-base font-semibold tracking-tight text-foreground">
-                  Dynamic Structure Graph
-                </h2>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Enter or paste a poem in the editor and click{" "}
-                  <strong className="font-medium text-foreground">Analyze</strong> in
-                  the top bar to render its dynamic structural graph.
-                </p>
-              </div>
-              <div className="pt-2">
-                <span className="font-mono text-[11px] text-muted-foreground/70">
-                  Provider: {modelId} • Custom SVG Semantic Graph
-                </span>
-              </div>
+      {/* Main Workspace: SVG Graph and Conditional Resizable Inspector Sidebar */}
+      <div className="flex-1 min-h-0 min-w-0 w-full h-full overflow-hidden">
+        <ResizablePanelGroup
+          id="graph-viewport-panels"
+          orientation="horizontal"
+          className="h-full w-full"
+        >
+          {/* Main SVG Graph Canvas Panel */}
+          <ResizablePanel
+            id="graph-canvas-panel"
+            minSize="40%"
+            className="relative h-full w-full min-h-0 min-w-0 overflow-hidden"
+          >
+            <div
+              ref={containerRef}
+              className="relative w-full h-full min-h-0 min-w-0 overflow-hidden bg-background"
+            >
+              {!analysis && !isAnalyzing ? (
+                <div className="flex h-full w-full flex-col items-center justify-center p-8 text-center select-none bg-background">
+                  <div className="max-w-md space-y-4">
+                    <div className="mx-auto flex size-12 items-center justify-center rounded-lg border border-border/80 bg-muted/20">
+                      <Activity className="size-6 text-muted-foreground" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h2 className="font-heading text-base font-semibold tracking-tight text-foreground">
+                        Dynamic Structure Graph
+                      </h2>
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        Enter or paste a poem in the editor and click{" "}
+                        <strong className="font-medium text-foreground">Analyze</strong> in
+                        the top bar to render its dynamic structural graph.
+                      </p>
+                    </div>
+                    <div className="pt-2">
+                      <span className="font-mono text-[11px] text-muted-foreground/70">
+                        Provider: {modelId} • Custom SVG Semantic Graph
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : isAnalyzing && !viewModel ? (
+                <GraphAnalyzingState modelId={modelId} />
+              ) : viewModel ? (
+                <div className="relative w-full h-full">
+                  <GraphRenderer
+                    viewModel={viewModel}
+                    selectedSegmentIds={selectedSegmentIds}
+                    groups={overrides?.groups}
+                    analysisId={analysisId}
+                    onSelectSegment={onSelectSegment}
+                    onSelectMovement={handleSelectMovement}
+                    onDragOverride={handleNodeDrag}
+                    onDragEnd={onDragEnd}
+                  />
+                  {isAnalyzing && <GraphScanningOverlay modelId={modelId} />}
+                </div>
+              ) : null}
             </div>
-          </div>
-        ) : viewModel ? (
-          <>
-            <GraphRenderer
-              viewModel={viewModel}
-              selectedSegmentIds={selectedSegmentIds}
-              groups={overrides?.groups}
-              analysisId={analysisId}
-              onSelectSegment={onSelectSegment}
-              onSelectMovement={handleSelectMovement}
-              onDragOverride={handleNodeDrag}
-              onDragEnd={onDragEnd}
-              onHoverTarget={setHoverTarget}
-            />
-            <GraphTooltip
-              target={activeTooltipTarget}
-              metric={currentDescriptor}
-              containerWidth={dimensions.width}
-              containerHeight={dimensions.height}
-              onOpenPassageReader={(point) => {
-                onSelectSegment(point.segmentId, false);
-                setIsPassageReaderOpen(true);
-              }}
-            />
-          </>
-        ) : null}
+          </ResizablePanel>
 
-        {/* Segment Inspector Popover */}
-        {singleSelectedSegment && isInspectorOpen && (
-          <SegmentInspector
-            segment={singleSelectedSegment}
-            excerpt={singleSelectedPoint?.excerpt ?? ""}
-            lineRangeLabel={singleSelectedPoint?.lineRangeLabel ?? ""}
-            overrides={overrides}
-            onUpdateOverride={onUpdateSegmentOverride}
-            onResetSegmentOverride={onResetSegmentOverride}
-            onAddGroup={onAddGroup}
-            onRemoveGroup={onRemoveGroup}
-            onClose={() => setIsInspectorOpen(false)}
-            onOpenPassageReader={() => setIsPassageReaderOpen(true)}
-          />
-        )}
+          {/* Conditional Resizable Inspector Sidebar */}
+          {Boolean((singleSelectedSegment && isInspectorOpen) || inspectedMovement) && (
+            <>
+              <ResizableHandle withHandle />
+              <ResizablePanel
+                id="graph-inspector-sidebar"
+                defaultSize="32%"
+                minSize="22%"
+                maxSize="50%"
+                collapsible={true}
+                collapsedSize="0%"
+                className="h-full flex flex-col bg-card border-l border-border/70 overflow-hidden"
+              >
+                {singleSelectedSegment && isInspectorOpen && (
+                  <SegmentInspector
+                    segment={singleSelectedSegment}
+                    excerpt={singleSelectedPoint?.excerpt ?? ""}
+                    sourcePassage={singleSelectedPoint?.sourcePassage ?? ""}
+                    lineRangeLabel={singleSelectedPoint?.lineRangeLabel ?? ""}
+                    overrides={overrides}
+                    onUpdateOverride={onUpdateSegmentOverride}
+                    onResetSegmentOverride={onResetSegmentOverride}
+                    onAddGroup={onAddGroup}
+                    onRemoveGroup={onRemoveGroup}
+                    onClose={() => setIsInspectorOpen(false)}
+                    onOpenPassageReader={() => setIsPassageReaderOpen(true)}
+                  />
+                )}
 
-        {/* Movement Inspector Popover */}
-        {inspectedMovement && (
-          <MovementInspector
-            movement={inspectedMovement}
-            overrides={overrides}
-            onUpdateMovementOverride={onUpdateMovementOverride}
-            onResetMovementOverride={onResetMovementOverride}
-            onClose={() => setInspectedMovementId(null)}
-          />
-        )}
+                {inspectedMovement && (
+                  <MovementInspector
+                    movement={inspectedMovement}
+                    overrides={overrides}
+                    onUpdateMovementOverride={onUpdateMovementOverride}
+                    onResetMovementOverride={onResetMovementOverride}
+                    onClose={() => setInspectedMovementId(null)}
+                  />
+                )}
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
+      </div>
 
         {/* Group Manager for Multi-selection and Groups */}
         <GroupManager
@@ -442,7 +464,6 @@ export function GraphViewport({
             }
           }}
         />
-      </div>
     </main>
   );
 }

@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "react";
-import { PanelLeftClose } from "lucide-react";
+import { PanelLeftClose, WrapText } from "lucide-react";
 import { Button } from "../../components/ui/button";
+import { cn } from "cn";
 
 export interface EditorSelectionRange {
   startLine: number;
@@ -16,6 +17,8 @@ interface TextEditorProps {
   onToggleCollapse: () => void;
   selectedRange?: EditorSelectionRange | null;
   onCursorChange?: (cursorOffset: number) => void;
+  wordWrap?: boolean;
+  onToggleWordWrap?: () => void;
 }
 
 export function TextEditor({
@@ -24,6 +27,8 @@ export function TextEditor({
   onToggleCollapse,
   selectedRange,
   onCursorChange,
+  wordWrap = false,
+  onToggleWordWrap,
 }: TextEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
@@ -96,15 +101,33 @@ export function TextEditor({
             ({lineCount} {lineCount === 1 ? "line" : "lines"})
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={onToggleCollapse}
-          className="text-muted-foreground hover:text-foreground shrink-0"
-          title="Collapse Text Editor"
-        >
-          <PanelLeftClose className="size-3.5" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          {onToggleWordWrap && (
+            <Button
+              variant={wordWrap ? "secondary" : "ghost"}
+              size="icon-xs"
+              onClick={onToggleWordWrap}
+              className={cn(
+                "size-6 shrink-0 text-muted-foreground hover:text-foreground",
+                wordWrap && "bg-muted text-foreground font-semibold"
+              )}
+              title={wordWrap ? "Disable Word Wrap (⌥Z)" : "Enable Word Wrap (⌥Z)"}
+              aria-label="Toggle Word Wrap"
+              aria-pressed={wordWrap}
+            >
+              <WrapText className="size-3.5" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onToggleCollapse}
+            className="size-6 text-muted-foreground hover:text-foreground shrink-0"
+            title="Collapse Text Editor"
+          >
+            <PanelLeftClose className="size-3.5" />
+          </Button>
+        </div>
       </div>
 
       {/* Editor Workspace: Gutter + Textarea */}
@@ -113,7 +136,7 @@ export function TextEditor({
         <div
           ref={gutterRef}
           aria-hidden="true"
-          className="w-10 select-none overflow-hidden border-r border-border/40 bg-muted/30 py-3 text-right font-mono text-[11px] text-muted-foreground/60 pr-2.5"
+          className="w-10 select-none overflow-hidden border-r border-border/40 bg-muted/30 py-3 text-right font-mono text-[11px] text-muted-foreground/60 pr-2.5 shrink-0"
         >
           {Array.from({ length: lineCount }).map((_, i) => {
             const lineNum = i + 1;
@@ -145,8 +168,19 @@ export function TextEditor({
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
+          wrap={wordWrap ? "soft" : "off"}
           placeholder="Paste or write poem here..."
-          className="flex-1 resize-none bg-transparent py-3 px-3 font-mono text-xs leading-5 text-foreground placeholder:text-muted-foreground/50 outline-none overflow-y-auto whitespace-pre tab-[2]"
+          className={cn(
+            "flex-1 min-w-0 w-full resize-none bg-transparent py-3 px-3 font-mono text-xs leading-5 text-foreground placeholder:text-muted-foreground/50 outline-none overflow-y-auto tab-[2]",
+            wordWrap
+              ? "whitespace-pre-wrap break-words overflow-x-hidden"
+              : "whitespace-pre overflow-x-auto"
+          )}
+          style={{
+            whiteSpace: wordWrap ? "pre-wrap" : "pre",
+            overflowWrap: wordWrap ? "break-word" : "normal",
+            wordBreak: wordWrap ? "break-word" : "normal",
+          }}
         />
       </div>
     </aside>

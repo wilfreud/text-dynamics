@@ -180,4 +180,33 @@ describe("passagePreview — Exact Source Extraction & Deterministic Previews", 
     assert.ok(!preview.head?.endsWith("con"));
     assert.ok(!preview.tail?.startsWith("tels"));
   });
+
+  it("handles raw Gemini snake_case contracts gracefully", () => {
+    // Exact shape returned by Gemini / stored in raw_analysis_json
+    const rawSnakeCaseSegment = {
+      id: "s001",
+      start_unit_id: "u0001",
+      end_unit_id: "u0002",
+      intensity: 6.8,
+      tension: 7.2,
+      valence: -6.5,
+      temperature: 4.5,
+      confidence: 0.9,
+    };
+
+    const resolved = getSegmentSourcePassage(
+      fullSourceText,
+      rawSnakeCaseSegment as any,
+      sampleUnits
+    );
+
+    assert.ok(resolved !== null);
+    assert.strictEqual(resolved.isValid, true);
+    assert.strictEqual(
+      resolved.passage,
+      fullSourceText.slice(0, 84)
+    );
+    assert.strictEqual(resolved.characterCount, 84);
+    assert.strictEqual(resolved.unitRangeLabel, "u0001–u0002");
+  });
 });

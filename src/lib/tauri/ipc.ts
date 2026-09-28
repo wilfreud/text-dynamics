@@ -162,3 +162,6 @@ export async function ipcGetAnalysisOverrides(
   });
 }
 
+export async function ipcSyncWordWrapMenu(checked: boolean): Promise<void> {
+  return invoke<void>("sync_word_wrap_menu", { checked });
+}

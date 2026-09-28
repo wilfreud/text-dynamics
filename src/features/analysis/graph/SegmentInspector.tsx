@@ -4,13 +4,30 @@ import type {
   SegmentOverride,
   UserOverrides,
 } from "../types";
-import { Button } from "../../../components/ui/button";
-import { Input } from "../../../components/ui/input";
-import { X, RotateCcw, Users, Plus, Trash2, Maximize2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import { createPassagePreview } from "../passage/passagePreview";
+import {
+  X,
+  RotateCcw,
+  Users,
+  Plus,
+  Trash2,
+  Maximize2,
+  BookOpen,
+  SlidersHorizontal,
+} from "lucide-react";
 
 interface SegmentInspectorProps {
   segment: AnalysisSegment;
   excerpt: string;
+  sourcePassage?: string;
   lineRangeLabel: string;
   overrides?: UserOverrides;
   onUpdateOverride: (segmentId: string, override: SegmentOverride) => void;
@@ -24,6 +41,7 @@ interface SegmentInspectorProps {
 export function SegmentInspector({
   segment,
   excerpt,
+  sourcePassage,
   lineRangeLabel,
   overrides,
   onUpdateOverride,
@@ -89,10 +107,17 @@ export function SegmentInspector({
     setIsCreatingGroup(false);
   }
 
+  const rawPassage = sourcePassage || excerpt;
+  const preview = createPassagePreview(rawPassage, {
+    fullThreshold: 200,
+    headTarget: 100,
+    tailTarget: 75,
+  });
+
   return (
-    <div className="absolute top-14 right-4 z-30 w-80 rounded-lg border border-border/80 bg-popover/95 p-4 font-sans text-xs text-popover-foreground shadow-xl backdrop-blur-sm animate-in fade-in zoom-in-95 duration-100 select-none">
+    <div className="flex flex-col h-full w-full bg-card p-4 overflow-y-auto select-none font-sans text-xs text-foreground">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border/50 pb-2">
+      <div className="flex items-center justify-between border-b border-border/50 pb-2.5">
         <div>
           <div className="flex items-center gap-1.5 font-mono text-xs font-semibold text-foreground">
             <span>{segment.id}</span>
@@ -109,7 +134,7 @@ export function SegmentInspector({
               variant="ghost"
               size="icon-xs"
               onClick={() => onResetSegmentOverride(segment.id)}
-              className="text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground cursor-pointer"
               title="Reset all metrics on this segment to AI values"
             >
               <RotateCcw className="size-3" />
@@ -119,44 +144,111 @@ export function SegmentInspector({
             variant="ghost"
             size="icon-xs"
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground cursor-pointer"
+            title="Fermer l'inspecteur"
           >
             <X className="size-3.5" />
           </Button>
         </div>
       </div>
 
-      {/* Excerpt */}
-      {excerpt && (
-        <div className="my-2.5 rounded border border-border/50 bg-muted/30 p-2.5 font-serif text-[11px] text-foreground/90 leading-snug">
-          <div className="flex items-center justify-between font-mono text-[9px] text-muted-foreground pb-1">
-            <span className="uppercase tracking-wider font-semibold">Passage</span>
-            {onOpenPassageReader && (
-              <button
-                type="button"
-                onClick={onOpenPassageReader}
-                className="flex items-center gap-1 hover:text-foreground cursor-pointer transition-colors"
-                title="Open full passage reader"
-              >
-                <Maximize2 className="size-2.5" />
-                <span>Read</span>
-              </button>
-            )}
+      {/* Tabs: Passage & Métriques */}
+      <Tabs defaultValue="passage" className="w-full mt-2.5">
+        <TabsList className="grid w-full grid-cols-2 h-7 bg-muted/60 p-0.5">
+          <TabsTrigger
+            value="passage"
+            className="flex items-center justify-center gap-1.5 text-[11px] font-medium h-6 cursor-pointer"
+          >
+            <BookOpen className="size-3" />
+            <span>Passage</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="metrics"
+            className="flex items-center justify-center gap-1.5 text-[11px] font-medium h-6 cursor-pointer"
+          >
+            <SlidersHorizontal className="size-3" />
+            <span>Métriques</span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Tab 1: Passage */}
+        <TabsContent value="passage" className="mt-3 space-y-3 focus-visible:outline-none">
+          {/* Excerpt / Preview Card */}
+          {rawPassage ? (
+            <div className="rounded border border-border/60 bg-muted/30 p-2.5">
+              <div className="flex items-center justify-between font-mono text-[9px] text-muted-foreground pb-1 mb-1 border-b border-border/30">
+                <span className="uppercase tracking-wider font-semibold">Extrait source</span>
+                {preview.kind === "head-tail" && (
+                  <span>{rawPassage.length} chars</span>
+                )}
+              </div>
+
+              {preview.kind === "head-tail" ? (
+                <div className="whitespace-pre-wrap font-serif text-[11px] leading-relaxed text-foreground/90">
+                  <p>{preview.head}</p>
+                  <div className="my-1.5 flex items-center justify-center gap-1 font-mono text-[9px] text-muted-foreground/60 select-none">
+                    <span>⋯</span>
+                    <span>{preview.omittedCharacterCount} caractères omis</span>
+                    <span>⋯</span>
+                  </div>
+                  <p>{preview.tail}</p>
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap font-serif text-[11px] leading-relaxed text-foreground/90">
+                  {preview.text}
+                </p>
+              )}
+
+              {onOpenPassageReader && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onOpenPassageReader}
+                  className="w-full mt-2.5 h-6.5 text-[10px] font-mono flex items-center justify-center gap-1.5 cursor-pointer hover:bg-accent"
+                >
+                  <Maximize2 className="size-3" />
+                  <span>Ouvrir dans le lecteur</span>
+                </Button>
+              )}
+            </div>
+          ) : null}
+
+          {/* Rationale / Interpretation */}
+          {segment.rationale && (
+            <div className="rounded border-l-2 border-border/80 bg-muted/20 pl-2.5 py-1 text-[11px] italic font-serif text-muted-foreground leading-relaxed">
+              {segment.rationale}
+            </div>
+          )}
+
+          {/* Metric Summary Strip */}
+          <div className="grid grid-cols-4 gap-1 pt-1 font-mono text-[10px] text-center">
+            <div className="bg-muted/40 rounded p-1">
+              <div className="text-muted-foreground text-[9px]">Int</div>
+              <div className="font-semibold text-foreground">{effectiveIntensity}</div>
+            </div>
+            <div className="bg-muted/40 rounded p-1">
+              <div className="text-muted-foreground text-[9px]">Ten</div>
+              <div className="font-semibold text-foreground">{effectiveTension}</div>
+            </div>
+            <div className="bg-muted/40 rounded p-1">
+              <div className="text-muted-foreground text-[9px]">Val</div>
+              <div className="font-semibold text-foreground">
+                {effectiveValence > 0 ? `+${effectiveValence}` : effectiveValence}
+              </div>
+            </div>
+            <div className="bg-muted/40 rounded p-1">
+              <div className="text-muted-foreground text-[9px]">Temp</div>
+              <div className="font-semibold text-foreground">
+                {effectiveTemperature > 0 ? `+${effectiveTemperature}` : effectiveTemperature}
+              </div>
+            </div>
           </div>
-          <p className="whitespace-pre-wrap">{excerpt}</p>
-        </div>
-      )}
+        </TabsContent>
 
-      {/* Rationale */}
-      {segment.rationale && (
-        <div className="mb-3 text-[11px] text-muted-foreground/90 leading-relaxed">
-          {segment.rationale}
-        </div>
-      )}
-
-      {/* Metric Overrides Grid */}
-      <div className="space-y-2 border-t border-border/40 pt-2.5">
-        {/* Intensity */}
+        {/* Tab 2: Métriques & Ajustements */}
+        <TabsContent value="metrics" className="mt-3 space-y-2.5 focus-visible:outline-none">
+          <div className="space-y-2 pt-1">
+            {/* Intensity */}
         <div className="flex items-center justify-between gap-2 font-mono text-[11px]">
           <span className="text-muted-foreground w-20">Intensity:</span>
           <div className="flex items-center gap-1">
@@ -377,6 +469,8 @@ export function SegmentInspector({
           </span>
         )}
       </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

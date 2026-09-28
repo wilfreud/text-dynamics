@@ -69,7 +69,7 @@ describe("graphPath — Monotone Cubic Spline & Semantic Geometry", () => {
     assert.strictEqual(cmd, "L 100.00 50.00");
   });
 
-  it("never smooths dramatic discontinuous movements (drop, rupture, plateau, spike)", () => {
+  it("renders pure smooth cubic Bezier when control points are supplied for continuous movements", () => {
     const p1 = { x: 0, y: 10 };
     const p2 = { x: 100, y: 2 };
     const cp = {
@@ -77,24 +77,32 @@ describe("graphPath — Monotone Cubic Spline & Semantic Geometry", () => {
       cp2: { x: 66.67, y: 2 },
     };
 
-    // Drop must keep near-vertical plunge (tiger-style negative space rule)
+    // Drop, plateau, spike smoothly curve when spline control points are supplied
     const dropCmd = generateSemanticPathSegment(p1, p2, "drop", cp);
-    assert.ok(dropCmd.startsWith("L "));
-    assert.ok(!dropCmd.includes("C "));
+    assert.ok(dropCmd.startsWith("C "));
 
-    // Rupture must remain an orthogonal step
+    const plateauCmd = generateSemanticPathSegment(p1, p2, "plateau", cp);
+    assert.ok(plateauCmd.startsWith("C "));
+
+    const spikeCmd = generateSemanticPathSegment(p1, p2, "spike", cp);
+    assert.ok(spikeCmd.startsWith("C "));
+  });
+
+  it("always renders an orthogonal step break for rupture and reset even if control points exist", () => {
+    const p1 = { x: 0, y: 10 };
+    const p2 = { x: 100, y: 2 };
+    const cp = {
+      cp1: { x: 33.33, y: 10 },
+      cp2: { x: 66.67, y: 2 },
+    };
+
     const ruptureCmd = generateSemanticPathSegment(p1, p2, "rupture", cp);
     assert.ok(ruptureCmd.startsWith("L "));
     assert.ok(!ruptureCmd.includes("C "));
 
-    // Plateau must hold level
-    const plateauCmd = generateSemanticPathSegment(p1, p2, "plateau", cp);
-    assert.ok(plateauCmd.startsWith("L "));
-    assert.ok(!plateauCmd.includes("C "));
-
-    // Spike must step rapidly
-    const spikeCmd = generateSemanticPathSegment(p1, p2, "spike", cp);
-    assert.ok(spikeCmd.startsWith("L "));
-    assert.ok(!spikeCmd.includes("C "));
+    const resetCmd = generateSemanticPathSegment(p1, p2, "reset", cp);
+    assert.ok(resetCmd.startsWith("L "));
+    assert.ok(!resetCmd.includes("C "));
   });
 });
+

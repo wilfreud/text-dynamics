@@ -10,6 +10,33 @@ import type { CanonicalAnalysis, UserOverrides } from "./types";
 
 const logger = getLogger(["analysis"]);
 
+export function normalizeCanonicalAnalysis(raw: any): CanonicalAnalysis {
+  if (!raw) return raw;
+  return {
+    schemaVersion: raw.schemaVersion ?? raw.schema_version ?? "1.0",
+    segments: (raw.segments ?? []).map((s: any) => ({
+      ...s,
+      startUnitId: s.startUnitId ?? s.start_unit_id ?? "",
+      endUnitId: s.endUnitId ?? s.end_unit_id ?? "",
+    })),
+    movements: (raw.movements ?? []).map((m: any) => ({
+      ...m,
+      startSegmentId: m.startSegmentId ?? m.start_segment_id ?? "",
+      endSegmentId: m.endSegmentId ?? m.end_segment_id ?? "",
+    })),
+    phases: (raw.phases ?? []).map((p: any) => ({
+      ...p,
+      startSegmentId: p.startSegmentId ?? p.start_segment_id ?? "",
+      endSegmentId: p.endSegmentId ?? p.end_segment_id ?? "",
+    })),
+    overall: {
+      summary: raw.overall?.summary ?? "",
+      dominantShape:
+        raw.overall?.dominantShape ?? raw.overall?.dominant_shape ?? "",
+    },
+  };
+}
+
 export interface AnalysisModelResult {
   record: AnalysisRecordDto;
   analysis: CanonicalAnalysis;
@@ -28,7 +55,8 @@ export async function requestDocumentAnalysis(
   });
   const record = await ipcAnalyzeDocument(documentId, customInstruction, modelOverride, units);
 
-  const analysis: CanonicalAnalysis = JSON.parse(record.raw_analysis_json);
+  const rawParsed = JSON.parse(record.raw_analysis_json);
+  const analysis: CanonicalAnalysis = normalizeCanonicalAnalysis(rawParsed);
   let overrides: UserOverrides | undefined;
 
   const overridesDto = await ipcGetAnalysisOverrides(record.id);
@@ -49,7 +77,8 @@ export async function fetchLatestAnalysis(
   const record = await ipcGetLatestAnalysis(documentId);
   if (!record) return null;
 
-  const analysis: CanonicalAnalysis = JSON.parse(record.raw_analysis_json);
+  const rawParsed = JSON.parse(record.raw_analysis_json);
+  const analysis: CanonicalAnalysis = normalizeCanonicalAnalysis(rawParsed);
   let overrides: UserOverrides | undefined;
 
   const overridesDto = await ipcGetAnalysisOverrides(record.id);

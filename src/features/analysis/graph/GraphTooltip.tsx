@@ -48,10 +48,10 @@ export function GraphTooltip({
     left = containerWidth - tooltipWidth - 16;
   }
 
-  let top = y - tooltipHeight - 16;
+  let top = y - tooltipHeight - 24;
   if (top < 12) {
-    // Flip below
-    top = y + 16;
+    // Flip below node with safe clearance
+    top = y + 24;
   }
   if (top + tooltipHeight > containerHeight - 12) {
     top = Math.max(12, containerHeight - tooltipHeight - 12);
@@ -66,7 +66,7 @@ export function GraphTooltip({
       }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="pointer-events-auto absolute z-30 select-none rounded-lg border border-border/80 bg-popover/95 p-3.5 font-sans text-xs text-popover-foreground shadow-xl backdrop-blur-sm animate-in fade-in zoom-in-95 duration-100"
+      className="pointer-events-auto absolute z-30 select-none rounded-lg border border-border/80 bg-popover/95 p-3.5 font-sans text-xs text-popover-foreground shadow-xl backdrop-blur-sm animate-in fade-in duration-75"
     >
       {target.type === "point" && (
         <PointTooltipContent

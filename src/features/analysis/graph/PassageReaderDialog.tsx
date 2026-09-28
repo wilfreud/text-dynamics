@@ -121,7 +121,7 @@ export function PassageReaderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl font-sans gap-0 p-0 max-h-[85vh] flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-3xl md:max-w-4xl w-full font-sans gap-0 p-0 max-h-[85vh] flex flex-col overflow-hidden">
         {/* Header */}
         <DialogHeader className="gap-1 border-b border-border/60 p-5 pb-4 select-none shrink-0">
           <div className="flex items-center justify-between pr-6">
@@ -138,8 +138,12 @@ export function PassageReaderDialog({
 
           <DialogDescription className="text-xs text-muted-foreground flex items-center gap-2 pt-0.5 font-mono">
             <span>{characterCount} {characterCount === 1 ? "char" : "chars"}</span>
-            <span>•</span>
-            <span>Units {unitRangeLabel}</span>
+            {unitRangeLabel && (
+              <>
+                <span>•</span>
+                <span>Units {unitRangeLabel}</span>
+              </>
+            )}
             {phaseLabel && (
               <>
                 <span>•</span>
@@ -171,7 +175,7 @@ export function PassageReaderDialog({
           tabIndex={0}
         >
           {sourcePassage ? (
-            <div className="max-w-[68ch] mx-auto">
+            <div className="max-w-3xl mx-auto w-full">
               <p className="whitespace-pre-wrap font-serif text-[15px] sm:text-[16px] leading-[1.8] text-foreground/95 antialiased selection:bg-muted">
                 {sourcePassage}
               </p>

@@ -17,7 +17,7 @@ interface GraphRendererProps {
   onSelectMovement?: (movementId: string) => void;
   onDragOverride?: (segmentId: string, newValue: number) => void;
   onDragEnd?: () => void;
-  onHoverTarget: (
+  onHoverTarget?: (
     target:
       | { type: "point"; point: GraphPoint }
       | { type: "movement"; marker: GraphMovementMarker }
@@ -98,7 +98,7 @@ export function GraphRenderer({
       startY: e.clientY,
       hasMoved: false,
     });
-    onHoverTarget(null);
+    onHoverTarget?.(null);
   }
 
   function handleNodePointerMove(e: React.PointerEvent<SVGGElement>) {
@@ -244,13 +244,13 @@ export function GraphRenderer({
                 }
               }}
               onMouseEnter={() => {
-                if (!dragState) onHoverTarget({ type: "movement", marker: mov });
+                if (!dragState) onHoverTarget?.({ type: "movement", marker: mov });
               }}
-              onMouseLeave={() => onHoverTarget(null)}
+              onMouseLeave={() => onHoverTarget?.(null)}
               onFocus={() => {
-                if (!dragState) onHoverTarget({ type: "movement", marker: mov });
+                if (!dragState) onHoverTarget?.({ type: "movement", marker: mov });
               }}
-              onBlur={() => onHoverTarget(null)}
+              onBlur={() => onHoverTarget?.(null)}
             >
               {/* Invisible Hit Area */}
               <rect
@@ -268,7 +268,7 @@ export function GraphRenderer({
                 y2={mov.y}
                 stroke="currentColor"
                 strokeWidth="1.2"
-                className="text-muted-foreground/60 group-hover:text-foreground transition-colors"
+                className="text-muted-foreground/60 group-hover:text-foreground transition-colors pointer-events-none"
               />
               {/* Left End Tick */}
               <line
@@ -278,7 +278,7 @@ export function GraphRenderer({
                 y2={mov.y + 3}
                 stroke="currentColor"
                 strokeWidth="1.2"
-                className="text-muted-foreground/60 group-hover:text-foreground"
+                className="text-muted-foreground/60 group-hover:text-foreground pointer-events-none"
               />
               {/* Right End Tick */}
               <line
@@ -288,14 +288,14 @@ export function GraphRenderer({
                 y2={mov.y + 3}
                 stroke="currentColor"
                 strokeWidth="1.2"
-                className="text-muted-foreground/60 group-hover:text-foreground"
+                className="text-muted-foreground/60 group-hover:text-foreground pointer-events-none"
               />
               {/* Label */}
               <text
                 x={midX}
                 y={mov.y - 5}
                 textAnchor="middle"
-                className="fill-muted-foreground group-hover:fill-foreground font-mono text-[9px] uppercase tracking-wider font-semibold transition-colors"
+                className="fill-muted-foreground group-hover:fill-foreground font-mono text-[9px] uppercase tracking-wider font-semibold transition-colors pointer-events-none"
               >
                 {mov.kind}
               </text>
@@ -377,15 +377,15 @@ export function GraphRenderer({
                 }
               }}
               onMouseEnter={() => {
-                if (!dragState) onHoverTarget({ type: "point", point });
+                if (!dragState) onHoverTarget?.({ type: "point", point });
               }}
               onMouseLeave={() => {
-                if (!dragState) onHoverTarget(null);
+                if (!dragState) onHoverTarget?.(null);
               }}
               onFocus={() => {
-                if (!dragState) onHoverTarget({ type: "point", point });
+                if (!dragState) onHoverTarget?.({ type: "point", point });
               }}
-              onBlur={() => onHoverTarget(null)}
+              onBlur={() => onHoverTarget?.(null)}
             >
               {/* Larger Transparent Hit Target */}
               <circle cx={point.x} cy={point.y} r="16" fill="transparent" />
@@ -399,7 +399,7 @@ export function GraphRenderer({
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.5"
-                  className="text-foreground animate-pulse"
+                  className="text-foreground animate-pulse pointer-events-none"
                 />
               )}
 
@@ -422,7 +422,7 @@ export function GraphRenderer({
                 fill="var(--color-background)"
                 stroke="currentColor"
                 strokeWidth={isSelected ? "2.5" : "2"}
-                className="text-foreground transition-colors group-hover:stroke-foreground"
+                className="text-foreground transition-colors group-hover:stroke-foreground pointer-events-none"
               />
 
               {/* User Override Inner Dot */}
@@ -432,7 +432,7 @@ export function GraphRenderer({
                   cy={point.y}
                   r="2.5"
                   fill="currentColor"
-                  className="text-foreground"
+                  className="text-foreground pointer-events-none"
                 />
               )}
 
@@ -441,7 +441,7 @@ export function GraphRenderer({
                 x={point.x}
                 y={viewport.height - viewport.padding.bottom + 18}
                 textAnchor="middle"
-                className={`font-mono text-[10px] transition-colors ${
+                className={`font-mono text-[10px] transition-colors pointer-events-none ${
                   isSelected
                     ? "fill-foreground font-semibold"
                     : "fill-muted-foreground/80 group-hover:fill-foreground"

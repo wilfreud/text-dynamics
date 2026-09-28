@@ -40,8 +40,10 @@ export function buildGraphViewModel(
     const metricVal = seg.metrics[metricKind];
     const y = projectY(metricVal, descriptor, viewport);
 
-    const startUnit = sourceUnits.find((u) => u.id === seg.startUnitId);
-    const endUnit = sourceUnits.find((u) => u.id === seg.endUnitId);
+    const startId = seg.startUnitId ?? (seg as any).start_unit_id;
+    const endId = seg.endUnitId ?? (seg as any).end_unit_id;
+    const startUnit = sourceUnits.find((u) => u.id === startId);
+    const endUnit = sourceUnits.find((u) => u.id === endId);
 
     const startLine = (startUnit?.lineIndex ?? 0) + 1;
     const endLine = (endUnit?.lineIndex ?? startUnit?.lineIndex ?? 0) + 1;
@@ -131,12 +133,7 @@ export function buildGraphViewModel(
 
     const kind = movement ? movement.kind : "linear";
     intervalMovements[i] = kind;
-    intervalDiscontinuities[i] =
-      kind === "rupture" ||
-      kind === "reset" ||
-      kind === "drop" ||
-      kind === "plateau" ||
-      kind === "spike";
+    intervalDiscontinuities[i] = kind === "rupture" || kind === "reset";
   }
 
   // Compute monotone cubic spline control points if smooth interpolation is enabled

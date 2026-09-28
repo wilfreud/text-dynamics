@@ -411,7 +411,12 @@ export function formatModelPayload(result: UnitizationResult): string {
  * and line boundaries from local source units.
  */
 export function resolveSegmentOffsets(
-  segment: { startUnitId: string; endUnitId: string },
+  segment: {
+    startUnitId?: string;
+    endUnitId?: string;
+    start_unit_id?: string;
+    end_unit_id?: string;
+  },
   units: SourceUnit[]
 ): {
   startOffset: number;
@@ -419,8 +424,12 @@ export function resolveSegmentOffsets(
   startLine: number;
   endLine: number;
 } | null {
-  const startUnit = units.find((u) => u.id === segment.startUnitId);
-  const endUnit = units.find((u) => u.id === segment.endUnitId);
+  const startId = segment.startUnitId ?? segment.start_unit_id;
+  const endId = segment.endUnitId ?? segment.end_unit_id;
+  if (!startId || !endId) return null;
+
+  const startUnit = units.find((u) => u.id === startId);
+  const endUnit = units.find((u) => u.id === endId);
 
   if (!startUnit || !endUnit) return null;
 
