@@ -178,3 +178,100 @@ export async function ipcGetAnalysisOverrides(
 export async function ipcSyncWordWrapMenu(checked: boolean): Promise<void> {
   return invoke<void>("sync_word_wrap_menu", { checked });
 }
+
+export interface ActivityEventDto {
+  id: string;
+  createdAt: string;
+  sessionId: string;
+  documentId: string | null;
+  category: string;
+  eventName: string;
+  level: string;
+  message: string | null;
+  metadataJson: string | null;
+  source: string;
+}
+
+export interface SessionSummaryDto {
+  sessionId: string;
+  firstEventAt: string;
+  lastEventAt: string;
+  eventCount: number;
+  isCurrent: boolean;
+}
+
+export interface ActivityEventsFilterDto {
+  query?: string;
+  sessionId?: string;
+  documentId?: string;
+  level?: string;
+  category?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ActivityEventsResponseDto {
+  events: ActivityEventDto[];
+  totalCount: number;
+  hasMore: boolean;
+}
+
+export interface DiagnosticLogEntryDto {
+  id: string;
+  timestamp: string;
+  level: string;
+  sessionId: string | null;
+  documentId: string | null;
+  component: string | null;
+  message: string;
+  rawLine: string;
+}
+
+export interface DiagnosticLogsFilterDto {
+  query?: string;
+  sessionId?: string;
+  documentId?: string;
+  level?: string;
+  component?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface DiagnosticLogsResponseDto {
+  entries: DiagnosticLogEntryDto[];
+  totalCount: number;
+  hasMore: boolean;
+}
+
+export async function ipcListActivityEvents(
+  filter: ActivityEventsFilterDto
+): Promise<ActivityEventsResponseDto> {
+  return invoke<ActivityEventsResponseDto>("list_activity_events", { filter });
+}
+
+export async function ipcListSessions(): Promise<SessionSummaryDto[]> {
+  return invoke<SessionSummaryDto[]>("list_sessions");
+}
+
+export async function ipcGetCurrentSessionId(): Promise<string> {
+  return invoke<string>("get_current_session_id");
+}
+
+export async function ipcListDiagnosticLogs(
+  filter: DiagnosticLogsFilterDto
+): Promise<DiagnosticLogsResponseDto> {
+  return invoke<DiagnosticLogsResponseDto>("list_diagnostic_logs", { filter });
+}
+
+export async function ipcOpenLogsFolder(): Promise<void> {
+  return invoke<void>("open_logs_folder");
+}
+
+export async function ipcClearActivityHistory(): Promise<void> {
+  return invoke<void>("clear_activity_history");
+}
+
+export async function ipcClearDiagnosticLogs(): Promise<void> {
+  return invoke<void>("clear_diagnostic_logs");
+}
+

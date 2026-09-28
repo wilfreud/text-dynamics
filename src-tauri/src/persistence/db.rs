@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
 
-const CURRENT_SCHEMA_VERSION: i32 = 1;
+const CURRENT_SCHEMA_VERSION: i32 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -135,6 +135,37 @@ impl Database {
 
                  INSERT INTO schema_migrations (version, applied_at)
                  VALUES (1, datetime('now'));
+
+                 COMMIT;",
+            )?;
+        }
+
+        if current_version < 2 {
+            log::info!("Applying SQLite migration 2: activity_events schema");
+            conn.execute_batch(
+                "BEGIN TRANSACTION;
+
+                 CREATE TABLE IF NOT EXISTS activity_events (
+                     id TEXT PRIMARY KEY,
+                     created_at TEXT NOT NULL,
+                     session_id TEXT NOT NULL,
+                     document_id TEXT,
+                     category TEXT NOT NULL,
+                     event_name TEXT NOT NULL,
+                     level TEXT NOT NULL DEFAULT 'info',
+                     message TEXT,
+                     metadata_json TEXT,
+                     source TEXT NOT NULL DEFAULT 'app'
+                 );
+
+                 CREATE INDEX IF NOT EXISTS idx_activity_created_at ON activity_events(created_at DESC);
+                 CREATE INDEX IF NOT EXISTS idx_activity_session ON activity_events(session_id);
+                 CREATE INDEX IF NOT EXISTS idx_activity_document ON activity_events(document_id);
+                 CREATE INDEX IF NOT EXISTS idx_activity_level ON activity_events(level);
+                 CREATE INDEX IF NOT EXISTS idx_activity_event ON activity_events(event_name);
+
+                 INSERT INTO schema_migrations (version, applied_at)
+                 VALUES (2, datetime('now'));
 
                  COMMIT;",
             )?;

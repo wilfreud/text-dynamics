@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "./ui/button";
-import { Play, Settings, FolderOpen, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Play, Settings, History, FolderOpen, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import type { AnalysisRetryState } from "@/features/analysis/types";
 
@@ -9,6 +9,7 @@ interface HeaderProps {
   onTitleChange: (newTitle: string) => void;
   onOpenDocuments: () => void;
   onOpenSettings: () => void;
+  onOpenHistory?: () => void;
   onAnalyze: () => void;
   isAnalyzing: boolean;
   canAnalyze: boolean;
@@ -22,6 +23,7 @@ export function Header({
   onTitleChange,
   onOpenDocuments,
   onOpenSettings,
+  onOpenHistory,
   onAnalyze,
   isAnalyzing,
   canAnalyze,
@@ -109,7 +111,7 @@ export function Header({
         )}
       </div>
 
-      {/* Right: Actions (Analyze, Settings) */}
+      {/* Right: Actions (Analyze, History, Settings) */}
       <div className="flex items-center gap-2 shrink-0">
         <Button
           size="sm"
@@ -138,6 +140,18 @@ export function Header({
             </>
           )}
         </Button>
+
+        {onOpenHistory && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onOpenHistory}
+            className="text-muted-foreground hover:text-foreground"
+            title="Open History & Logs"
+          >
+            <History className="size-4" />
+          </Button>
+        )}
 
         <Button
           variant="ghost"

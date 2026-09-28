@@ -17,6 +17,7 @@ pub fn get_setting(state: State<'_, AppState>, key: String) -> Result<Option<Str
 
 #[tauri::command]
 pub fn save_setting(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     key: String,
     value: String,
@@ -38,6 +39,25 @@ pub fn save_setting(
     )?;
 
     log::info!("Saved non-secret setting key={}", trimmed_key);
+
+    if trimmed_key == "gemini_model" {
+        let meta = serde_json::json!({ "model": value }).to_string();
+        crate::persistence::activity::record_and_emit_activity(
+            &app,
+            &state.db,
+            crate::persistence::activity::NewActivityEvent {
+                session_id: &state.session_id,
+                document_id: None,
+                category: "settings",
+                event_name: "settings.model_changed",
+                level: "info",
+                message: Some(&format!("Gemini model changed to {}", value)),
+                metadata_json: Some(&meta),
+                source: Some("app"),
+            },
+        );
+    }
+
     Ok(())
 }
 
@@ -52,13 +72,47 @@ pub fn has_api_key(state: State<'_, AppState>) -> Result<bool, AppError> {
 }
 
 #[tauri::command]
-pub fn set_api_key(state: State<'_, AppState>, api_key: String) -> Result<(), AppError> {
-    state.secrets.set_api_key(&api_key)
+pub fn set_api_key(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    api_key: String,
+) -> Result<(), AppError> {
+    state.secrets.set_api_key(&api_key)?;
+    crate::persistence::activity::record_and_emit_activity(
+        &app,
+        &state.db,
+        crate::persistence::activity::NewActivityEvent {
+            session_id: &state.session_id,
+            document_id: None,
+            category: "security",
+            event_name: "keychain.key_saved",
+            level: "info",
+            message: Some("Gemini API key saved to keychain"),
+            metadata_json: None,
+            source: Some("app"),
+        },
+    );
+    Ok(())
 }
 
 #[tauri::command]
-pub fn delete_api_key(state: State<'_, AppState>) -> Result<(), AppError> {
-    state.secrets.delete_api_key()
+pub fn delete_api_key(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
+    state.secrets.delete_api_key()?;
+    crate::persistence::activity::record_and_emit_activity(
+        &app,
+        &state.db,
+        crate::persistence::activity::NewActivityEvent {
+            session_id: &state.session_id,
+            document_id: None,
+            category: "security",
+            event_name: "keychain.key_deleted",
+            level: "info",
+            message: Some("Gemini API key deleted from keychain"),
+            metadata_json: None,
+            source: Some("app"),
+        },
+    );
+    Ok(())
 }
 
 #[tauri::command]

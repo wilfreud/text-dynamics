@@ -11,6 +11,7 @@ import {
   ResizablePanelGroup,
 } from "./components/ui/resizable";
 import { SettingsDialog } from "./features/settings/SettingsDialog";
+import { HistoryDialog } from "./features/history/HistoryDialog";
 import { DocumentSwitcher } from "./features/documents/DocumentSwitcher";
 import {
   fetchDocumentList,
@@ -58,6 +59,7 @@ export default function App() {
   // Dialogs state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDocumentsOpen, setIsDocumentsOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Document state
   const [currentDoc, setCurrentDoc] = useState<Document | null>(null);
@@ -633,6 +635,7 @@ export default function App() {
         onTitleChange={handleTitleChange}
         onOpenDocuments={() => setIsDocumentsOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenHistory={() => setIsHistoryOpen(true)}
         onAnalyze={handleAnalyze}
         isAnalyzing={isAnalyzing}
         canAnalyze={editorContent.trim().length > 0}
@@ -727,6 +730,14 @@ export default function App() {
         open={isSettingsOpen}
         onOpenChange={setIsSettingsOpen}
         onSettingsSaved={handleSettingsSaved}
+      />
+
+      {/* History & Diagnostics Modal */}
+      <HistoryDialog
+        open={isHistoryOpen}
+        onOpenChange={setIsHistoryOpen}
+        currentDocumentId={currentDoc?.id || null}
+        currentDocumentTitle={currentDoc?.title || null}
       />
 
       {/* Documents Switcher Modal */}
